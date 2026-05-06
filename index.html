@@ -1,0 +1,2468 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKY PV Monitor — Sistema de Incidencias Fotovoltaicas</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --sky:#0EA5E9; --sky-dark:#0284C7; --sky-light:#E0F2FE;
+  --amber:#F59E0B; --amber-light:#FEF3C7;
+  --red:#EF4444; --red-light:#FEE2E2;
+  --green:#22C55E; --green-light:#DCFCE7;
+  --orange:#F97316; --orange-light:#FFEDD5;
+  --purple:#8B5CF6; --purple-light:#EDE9FE;
+  --gray-50:#F8FAFC; --gray-100:#F1F5F9; --gray-200:#E2E8F0;
+  --gray-300:#CBD5E1; --gray-400:#94A3B8; --gray-500:#64748B;
+  --gray-600:#475569; --gray-700:#334155; --gray-800:#1E293B; --gray-900:#0F172A;
+  --white:#FFFFFF;
+  --radius:8px; --radius-lg:12px; --radius-xl:16px;
+  --shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08),0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg:0 10px 30px rgba(0,0,0,.1),0 4px 8px rgba(0,0,0,.05);
+  --sidebar:240px;
+  --font:'DM Sans',system-ui,sans-serif;
+  --mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--font);background:var(--gray-50);color:var(--gray-800);font-size:14px;-webkit-font-smoothing:antialiased}
+/* ── LAYOUT ── */
+#app{display:flex;height:100vh;overflow:hidden}
+/* ── SIDEBAR ── */
+#sidebar{width:var(--sidebar);background:var(--gray-900);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;transition:width .25s}
+#sidebar.collapsed{width:56px}
+.sb-header{padding:16px 12px 8px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px}
+.sb-logo{width:32px;height:32px;background:linear-gradient(135deg,var(--sky) 0%,var(--sky-dark) 100%);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sb-logo svg{width:18px;height:18px;fill:white}
+.sb-brand{font-size:13px;font-weight:600;color:white;white-space:nowrap;overflow:hidden}
+.sb-brand span{display:block;font-size:10px;font-weight:400;color:var(--gray-400);margin-top:1px}
+.sb-nav{padding:8px 8px;flex:1}
+.sb-section{font-size:10px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em;padding:12px 8px 4px;white-space:nowrap;overflow:hidden}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius);cursor:pointer;transition:all .15s;margin-bottom:2px;color:var(--gray-400);position:relative}
+.nav-item:hover{background:rgba(255,255,255,.06);color:white}
+.nav-item.active{background:rgba(14,165,233,.15);color:var(--sky)}
+.nav-item svg{width:17px;height:17px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav-label{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden}
+.nav-badge{margin-left:auto;background:var(--red);color:white;font-size:10px;font-weight:600;border-radius:20px;padding:1px 6px;flex-shrink:0}
+/* ── MAIN ── */
+#main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+#topbar{background:var(--white);border-bottom:1px solid var(--gray-200);padding:0 20px;height:56px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.page-title{font-size:15px;font-weight:600;color:var(--gray-800)}
+.page-sub{font-size:12px;color:var(--gray-400);margin-left:4px}
+#topbar-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:1px solid var(--gray-200);background:var(--white);color:var(--gray-700);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;font-family:var(--font)}
+.btn:hover{background:var(--gray-50);border-color:var(--gray-300)}
+.btn-primary{background:var(--sky);border-color:var(--sky-dark);color:white}
+.btn-primary:hover{background:var(--sky-dark);border-color:var(--sky-dark)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#content{flex:1;overflow-y:auto;padding:20px}
+/* ── TABS ── */
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+/* ── DASHBOARD ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px;transition:all .2s}
+.kpi:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.kpi-label{font-size:11px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.kpi-val{font-size:26px;font-weight:600;color:var(--gray-800);line-height:1;margin-bottom:4px}
+.kpi-sub{font-size:11px;color:var(--gray-400)}
+.kpi-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.c-sky{color:var(--sky)}.c-red{color:var(--red)}.c-green{color:var(--green)}.c-amber{color:var(--amber)}.c-orange{color:var(--orange)}.c-purple{color:var(--purple)}
+.charts-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px}
+.chart-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px}
+.chart-card h3{font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.chart-wrap{position:relative;height:200px}
+/* ── TABLES ── */
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.section-header h2{font-size:15px;font-weight:600;color:var(--gray-800)}
+.filters-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+.filter-input,.filter-select{font-family:var(--font);font-size:12.5px;padding:6px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:var(--white);color:var(--gray-700);outline:none;transition:border .15s}
+.filter-input:focus,.filter-select:focus{border-color:var(--sky)}
+.search-input{min-width:200px;padding-left:30px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:9px center}
+.table-wrap{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden}
+.table-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{padding:9px 12px;text-align:left;font-weight:600;font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--gray-200);background:var(--gray-50);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--gray-700)}
+td{padding:9px 12px;border-bottom:1px solid var(--gray-100);color:var(--gray-700);vertical-align:middle;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--gray-50)}
+.priority-badge,.status-badge,.warr-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.p-critico{background:#FEE2E2;color:#991B1B}
+.p-alta{background:#FFEDD5;color:#9A3412}
+.p-intermedia{background:#FEF3C7;color:#92400E}
+.p-baja{background:#DCFCE7;color:#166534}
+.p-none{background:var(--gray-100);color:var(--gray-500)}
+.s-open{background:#DBEAFE;color:#1E40AF}
+.s-process{background:#FEF3C7;color:#92400E}
+.s-wait{background:#EDE9FE;color:#5B21B6}
+.s-closed{background:#DCFCE7;color:#166534}
+.s-cancel{background:var(--gray-100);color:var(--gray-500)}
+.s-espera{background:#FAEEDA;color:#633806}
+.s-aprobada{background:#DCFCE7;color:#166534}
+.s-falta{background:#FEE2E2;color:#991B1B}
+.vigente{background:#DCFCE7;color:#166534}
+.por-vencer{background:#FEF3C7;color:#92400E}
+.vencida{background:#FEE2E2;color:#991B1B}
+.semaforo{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0}
+.sem-verde{background:var(--green)}
+.sem-amarillo{background:var(--amber)}
+.sem-rojo{background:var(--red)}
+.row-critico td{background:#FFF5F5}
+.row-alta td{background:#FFFBF5}
+.no-data{text-align:center;padding:32px;color:var(--gray-400);font-size:13px}
+.tbl-actions{display:flex;gap:4px;justify-content:flex-end}
+.icon-btn{background:none;border:1px solid var(--gray-200);border-radius:6px;cursor:pointer;padding:4px;color:var(--gray-400);transition:all .15s;display:inline-flex;align-items:center;justify-content:center}
+.icon-btn:hover{border-color:var(--gray-400);color:var(--gray-700);background:var(--gray-50)}
+.icon-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;overflow-y:auto;padding:20px}
+.modal-overlay.open{display:flex;align-items:flex-start;justify-content:center}
+.modal{background:var(--white);border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);width:100%;max-width:740px;margin:auto;overflow:hidden}
+.modal-header{padding:18px 20px 16px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{font-size:15px;font-weight:600;color:var(--gray-800)}
+.modal-body{padding:20px;max-height:75vh;overflow-y:auto}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--gray-100);display:flex;justify-content:flex-end;gap:8px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-grid .full{grid-column:1/-1}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:12px;font-weight:600;color:var(--gray-600)}
+.form-control{font-family:var(--font);font-size:13px;padding:8px 10px;border:1px solid var(--gray-200);border-radius:var(--radius);background:var(--white);color:var(--gray-800);outline:none;transition:border .15s;width:100%}
+.form-control:focus{border-color:var(--sky);box-shadow:0 0 0 3px rgba(14,165,233,.1)}
+.form-control[readonly]{background:var(--gray-50);color:var(--gray-500)}
+.autocomplete-field{background:#EFF8FF;border-color:var(--sky);color:var(--sky-dark)}
+textarea.form-control{min-height:72px;resize:vertical}
+.badge-count{background:var(--gray-100);color:var(--gray-600);padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600;margin-left:4px}
+/* ── CALENDAR ── */
+#cal-wrap{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden}
+.cal-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--gray-200);flex-wrap:wrap}
+.cal-header h3{font-size:14px;font-weight:600;color:var(--gray-800);flex:1;text-align:center;min-width:160px}
+.cal-filters{display:flex;flex-wrap:wrap;gap:8px;padding:10px 16px;border-bottom:1px solid var(--gray-200);background:var(--gray-50);align-items:center}
+.cal-legend{display:flex;gap:10px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--gray-100);background:var(--white);align-items:center}
+.cal-legend-item{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--gray-600);cursor:pointer;padding:3px 7px;border-radius:20px;border:1.5px solid transparent;transition:all .15s;user-select:none}
+.cal-legend-item.active{border-color:currentColor;background:rgba(0,0,0,.04)}
+.cal-legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-day-name{text-align:center;padding:8px;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;background:var(--gray-50);border-bottom:1px solid var(--gray-200)}
+.cal-cell{min-height:90px;border-right:1px solid var(--gray-100);border-bottom:1px solid var(--gray-100);padding:4px;vertical-align:top;transition:background .1s}
+.cal-cell:hover{background:var(--gray-50)}
+.cal-cell:nth-child(7n){border-right:none}
+.cal-cell.weekend{background:#FAFBFC}
+.cal-date{font-size:11px;font-weight:600;color:var(--gray-400);margin-bottom:3px;text-align:right;padding:2px 4px}
+.cal-date.today{background:var(--sky);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;margin-left:auto}
+.cal-date.other-month{color:var(--gray-200)}
+.cal-event{font-size:10px;padding:2px 5px;border-radius:3px;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;transition:opacity .1s;display:flex;align-items:center;gap:3px}
+.cal-event:hover{opacity:.8}
+.cal-event-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+/* event types */
+.evt-inc-critico{background:#FEE2E2;color:#991B1B}
+.evt-inc-alta{background:#FFEDD5;color:#9A3412}
+.evt-inc-intermedia{background:#FEF3C7;color:#92400E}
+.evt-ticket-vencido{background:#FEE2E2;color:#991B1B}
+.evt-ticket-proceso{background:#DBEAFE;color:#1E40AF}
+.evt-ticket-abierto{background:#EDE9FE;color:#5B21B6}
+.evt-ticket-programado{background:#DCFCE7;color:#166534}
+.evt-garantia{background:#F0FDF4;color:#15803D;border:1px solid #BBF7D0}
+.evt-garantia-vencida{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}
+.evt-poliza-vencer{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
+.evt-poliza-vencida{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}
+.evt-mant{background:#F0F9FF;color:#0369A1;border:1px solid #BAE6FD}
+.evt-red{background:#FEE2E2;color:#991B1B}
+.evt-blue{background:#DBEAFE;color:#1E40AF}
+.evt-green{background:#DCFCE7;color:#166534}
+.evt-purple{background:#EDE9FE;color:#5B21B6}
+.evt-amber{background:#FEF3C7;color:#92400E}
+/* event detail panel */
+.cal-detail-popup{position:fixed;z-index:300;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);width:320px;padding:0;overflow:hidden;display:none}
+.cal-detail-popup.open{display:block}
+.cdp-header{background:var(--gray-900);color:white;padding:12px 14px;display:flex;align-items:center;justify-content:space-between}
+.cdp-header h4{font-size:13px;font-weight:600}
+.cdp-body{padding:14px;max-height:300px;overflow-y:auto}
+.cdp-row{display:flex;flex-direction:column;gap:2px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--gray-100)}
+.cdp-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.cdp-label{font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.06em}
+.cdp-val{font-size:12.5px;color:var(--gray-700)}
+/* ── PROGRESS BAR ── */
+.progress-bar{height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden;flex:1}
+.progress-fill{height:100%;border-radius:3px;background:var(--sky);transition:width .4s}
+/* ── ALERT ── */
+.alert{padding:10px 14px;border-radius:var(--radius);font-size:12.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.alert-warn{background:var(--amber-light);color:#92400E;border:1px solid #FCD34D}
+.alert-danger{background:var(--red-light);color:#991B1B;border:1px solid #FCA5A5}
+/* ── RESPONSIVE SIDEBAR ── */
+#mob-toggle{display:none;background:none;border:none;padding:8px;cursor:pointer;color:var(--gray-600)}
+#mob-toggle svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:90}
+/* ── IMPORT ZONE ── */
+.import-zone{border:2px dashed var(--gray-200);border-radius:var(--radius-lg);padding:32px;text-align:center;cursor:pointer;transition:all .2s}
+.import-zone:hover{border-color:var(--sky);background:var(--sky-light)}
+.import-zone p{font-size:13px;color:var(--gray-400);margin-top:6px}
+/* ── TICKET KANBAN ── */
+.kanban{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.kanban-col{background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden}
+.kanban-hdr{padding:10px 12px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--gray-200)}
+.kanban-body{padding:8px;display:flex;flex-direction:column;gap:6px;min-height:80px}
+.ticket-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);padding:10px 12px;cursor:pointer;transition:all .15s}
+.ticket-card:hover{box-shadow:var(--shadow-md);border-color:var(--gray-300)}
+.tc-id{font-size:10px;color:var(--gray-400);font-family:var(--mono);margin-bottom:4px}
+.tc-title{font-size:12.5px;font-weight:600;color:var(--gray-700);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-footer{display:flex;align-items:center;justify-content:space-between}
+/* ── REPORTS ── */
+.report-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:20px}
+.report-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-lg);padding:16px;cursor:pointer;transition:all .2s}
+.report-card:hover{box-shadow:var(--shadow-md);border-color:var(--sky)}
+.report-card h4{font-size:13px;font-weight:600;color:var(--gray-700);margin-bottom:4px}
+.report-card p{font-size:11.5px;color:var(--gray-400)}
+/* ── MOBILE ── */
+@media (max-width:768px){
+  #sidebar{position:fixed;left:-var(--sidebar);top:0;bottom:0;z-index:100;left:-240px;transition:left .25s}
+  #sidebar.mobile-open{left:0}
+  #overlay.visible{display:block}
+  #mob-toggle{display:block}
+  #content{padding:12px}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .charts-row{grid-template-columns:1fr}
+  .form-grid{grid-template-columns:1fr}
+  .form-grid .full{grid-column:1}
+  .modal{max-width:100%}
+  .filters-bar .filter-input,.filters-bar .filter-select{font-size:12px}
+  .kanban{grid-template-columns:1fr}
+  .cal-event{display:none}
+  .cal-cell{min-height:40px}
+}
+@media (max-width:480px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .btn .btn-label{display:none}
+  #topbar-actions .btn:not(.btn-primary) .btn-label{display:none}
+}
+/* ── TOOLTIP ── */
+[title]{cursor:default}
+.tag-chip{display:inline-flex;align-items:center;gap:3px;background:var(--sky-light);color:var(--sky-dark);border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600}
+/* ── DETAIL PANEL ── */
+.detail-panel{position:fixed;right:-400px;top:0;bottom:0;width:380px;background:var(--white);box-shadow:var(--shadow-lg);z-index:150;transition:right .25s;overflow-y:auto;display:flex;flex-direction:column}
+.detail-panel.open{right:0}
+.dp-header{padding:16px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:10px}
+.dp-body{padding:16px;flex:1}
+.dp-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-50);gap:10px}
+.dp-row:last-child{border-bottom:none}
+.dp-key{font-size:11.5px;font-weight:600;color:var(--gray-400);white-space:nowrap}
+.dp-val{font-size:12.5px;color:var(--gray-700);text-align:right;word-break:break-word}
+</style>
+</head>
+<body>
+<div id="app">
+<!-- ── SIDEBAR ── -->
+<aside id="sidebar">
+  <div class="sb-header">
+    <div class="sb-logo">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    </div>
+    <div class="sb-brand">SKY PV Monitor<span>Sistemas Fotovoltaicos</span></div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-section">Principal</div>
+    <div class="nav-item active" onclick="showTab('dashboard')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span class="nav-label">Dashboard</span>
+    </div>
+    <div class="sb-section">Gestión</div>
+    <div class="nav-item" onclick="showTab('incidencias')">
+      <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span class="nav-label">Incidencias PV</span>
+      <span class="nav-badge" id="badge-inc">0</span>
+    </div>
+    <div class="nav-item" onclick="showTab('errores')">
+      <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      <span class="nav-label">Tabla de Errores</span>
+    </div>
+    <div class="nav-item" onclick="showTab('garantias')">
+      <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span class="nav-label">Garantías</span>
+      <span class="nav-badge" id="badge-warr">0</span>
+    </div>
+    <div class="nav-item" onclick="showTab('polizas')">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+      <span class="nav-label">Pólizas / Mant.</span>
+    </div>
+    <div class="nav-item" onclick="showTab('proyectos')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span class="nav-label">Base Proyectos</span>
+    </div>
+    <div class="nav-item" onclick="showTab('tickets')">
+      <svg viewBox="0 0 24 24"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
+      <span class="nav-label">Tickets</span>
+    </div>
+    <div class="sb-section">Visualización</div>
+    <div class="nav-item" onclick="showTab('calendario')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span class="nav-label">Calendario</span>
+    </div>
+    <div class="nav-item" onclick="showTab('reportes')">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span class="nav-label">Reportes</span>
+    </div>
+    <div class="sb-section">Datos</div>
+    <div class="nav-item" onclick="showTab('importar')">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span class="nav-label">Importar Excel</span>
+    </div>
+  </nav>
+</aside>
+<div id="overlay" onclick="closeMobile()"></div>
+
+<!-- ── MAIN AREA ── -->
+<main id="main">
+  <header id="topbar">
+    <button id="mob-toggle" onclick="toggleMobile()">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <span class="page-title" id="page-title">Dashboard</span>
+    <span class="page-sub" id="page-sub">Resumen ejecutivo</span>
+    <div id="topbar-actions">
+      <button class="btn btn-sm" onclick="exportCurrentTable()">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span class="btn-label">Exportar</span>
+      </button>
+      <button class="btn btn-primary btn-sm" id="btn-new" onclick="openNew()">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span class="btn-label">Nuevo</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="content">
+    <!-- ══ DASHBOARD ══ -->
+    <div id="tab-dashboard" class="tab-panel active">
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div id="alerts-area"></div>
+      <div class="charts-row" id="charts-row"></div>
+      <div class="charts-row" id="charts-row2"></div>
+    </div>
+
+    <!-- ══ INCIDENCIAS ══ -->
+    <div id="tab-incidencias" class="tab-panel">
+      <div class="section-header">
+        <h2>Registro de Incidencias PV</h2>
+        <span class="badge-count" id="inc-count">0</span>
+      </div>
+      <div class="filters-bar">
+        <input type="search" class="filter-input search-input" id="inc-search" placeholder="Buscar sitio, código, error..." oninput="filterIncidencias()">
+        <select class="filter-select" id="inc-plat" onchange="filterIncidencias()"><option value="">Plataforma</option></select>
+        <select class="filter-select" id="inc-cliente" onchange="filterIncidencias()"><option value="">Cliente</option></select>
+        <select class="filter-select" id="inc-prio" onchange="filterIncidencias()"><option value="">Prioridad</option><option>Critico</option><option>Alta</option><option>Intermedia</option><option>Baja</option></select>
+        <select class="filter-select" id="inc-status" onchange="filterIncidencias()"><option value="">Estatus ticket</option><option>SIN ACCIÓN</option><option>SI</option><option>NO</option></select>
+        <button class="btn btn-sm" onclick="clearFilter('inc')">✕ Limpiar</button>
+      </div>
+      <div class="table-wrap"><div class="table-scroll">
+        <table id="inc-table">
+          <thead><tr>
+            <th onclick="sortTable('inc','platform')">Plataforma</th>
+            <th onclick="sortTable('inc','num')">#</th>
+            <th onclick="sortTable('inc','site')">Sitio</th>
+            <th onclick="sortTable('inc','client')">Cliente</th>
+            <th onclick="sortTable('inc','code')">Código</th>
+            <th onclick="sortTable('inc','priority')">Prioridad</th>
+            <th>Notas</th>
+            <th onclick="sortTable('inc','lastMod')">Última Mod.</th>
+            <th onclick="sortTable('inc','incDate')">F. Incidencia</th>
+            <th onclick="sortTable('inc','days')">Días Inc.</th>
+            <th>Cód. Error</th>
+            <th>Clasificación</th>
+            <th>Problema</th>
+            <th>Solución</th>
+            <th>Ticket Alta</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="inc-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- ══ ERRORES ══ -->
+    <div id="tab-errores" class="tab-panel">
+      <div class="section-header">
+        <h2>Tabla de Errores</h2>
+        <span class="badge-count" id="err-count">0</span>
+      </div>
+      <div class="filters-bar">
+        <input type="search" class="filter-input search-input" id="err-search" placeholder="Buscar clave, marca, código..." oninput="filterErrors()">
+        <select class="filter-select" id="err-marca" onchange="filterErrors()"><option value="">Marca</option><option>SUNGROW</option><option>SOLIS</option><option>HUAWEI</option><option>SMA</option></select>
+        <select class="filter-select" id="err-class" onchange="filterErrors()"><option value="">Clasificación</option><option>INVERSOR</option><option>STRING</option><option>COMUNICACIÓN</option><option>MEDIDOR</option><option>CONSTRUCCIÓN</option></select>
+        <select class="filter-select" id="err-prio" onchange="filterErrors()"><option value="">Prioridad</option><option>Critico</option><option>Alta</option><option>Intermedia</option></select>
+      </div>
+      <div class="table-wrap"><div class="table-scroll">
+        <table id="err-table">
+          <thead><tr>
+            <th>Clave</th><th>Marca</th><th>Código</th><th>Clasificación</th><th>Problema</th><th>Causa Posible</th><th>Solución</th><th>Prioridad</th><th></th>
+          </tr></thead>
+          <tbody id="err-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- ══ GARANTÍAS ══ -->
+    <div id="tab-garantias" class="tab-panel">
+      <div class="section-header">
+        <h2>Garantías de Equipos</h2>
+        <span class="badge-count" id="warr-count">0</span>
+      </div>
+      <div class="filters-bar">
+        <input type="search" class="filter-input search-input" id="warr-search" placeholder="Buscar proyecto, ticket, marca..." oninput="filterWarranties()">
+        <select class="filter-select" id="warr-status" onchange="filterWarranties()"><option value="">Estatus</option><option>En espera de respuesta de distribuidior</option><option>Apobada, por gestionar entrega</option><option>En revisión</option><option>Aprobado</option><option>Rechazado</option><option>Cerrado</option><option>Falta</option></select>
+        <select class="filter-select" id="warr-prov" onchange="filterWarranties()"><option value="">Proveedor</option></select>
+      </div>
+      <div class="table-wrap"><div class="table-scroll">
+        <table id="warr-table">
+          <thead><tr>
+            <th>Proyecto</th><th>Código</th><th>Equipo</th><th>Marca</th><th>Modelo</th><th>SN</th>
+            <th>Error</th><th>Proveedor</th><th>Contacto</th><th>Ticket</th>
+            <th>Estatus</th><th>F. Subida</th><th>Días</th><th>Comentarios</th><th></th>
+          </tr></thead>
+          <tbody id="warr-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- ══ PÓLIZAS ══ -->
+    <div id="tab-polizas" class="tab-panel">
+      <div class="section-header"><h2>Pólizas y Mantenimientos</h2><span class="badge-count" id="pol-count">0</span></div>
+      <div class="filters-bar">
+        <input type="search" class="filter-input search-input" id="pol-search" placeholder="Buscar proyecto, cliente, código..." oninput="filterPolizas()">
+        <select class="filter-select" id="pol-status" onchange="filterPolizas()"><option value="">Estatus</option><option>Vigente</option><option>Por Vencer</option><option>Vencida</option></select>
+        <select class="filter-select" id="pol-grupo" onchange="filterPolizas()"><option value="">Grupo/Cliente</option></select>
+        <select class="filter-select" id="pol-zona" onchange="filterPolizas()"><option value="">Zona/Cuadrilla</option></select>
+      </div>
+      <div class="table-wrap"><div class="table-scroll">
+        <table id="pol-table">
+          <thead><tr>
+            <th>#</th><th>Grupo</th><th>Código</th><th>Proyecto</th><th>Plataforma</th><th>Inicio Sistema</th>
+            <th>Garantía Inicio</th><th>Garantía Fin</th><th>Estatus</th><th>Póliza</th><th>Zona</th><th></th>
+          </tr></thead>
+          <tbody id="pol-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- ══ PROYECTOS ══ -->
+    <div id="tab-proyectos" class="tab-panel">
+      <div class="section-header"><h2>Base de Proyectos</h2><span class="badge-count" id="proj-count">0</span></div>
+      <div class="filters-bar">
+        <input type="search" class="filter-input search-input" id="proj-search" placeholder="Buscar código, nombre, cliente..." oninput="filterProjects()">
+        <select class="filter-select" id="proj-grupo" onchange="filterProjects()"><option value="">Grupo</option></select>
+        <select class="filter-select" id="proj-plat" onchange="filterProjects()"><option value="">Plataforma</option></select>
+        <select class="filter-select" id="proj-estatus" onchange="filterProjects()"><option value="">Estatus póliza</option><option>Vigente</option><option>Por Vencer</option><option>Vencida</option><option>Sin datos</option></select>
+      </div>
+      <div class="table-wrap"><div class="table-scroll">
+        <table id="proj-table">
+          <thead><tr>
+            <th>Código</th><th>Nombre</th><th>Grupo</th><th>Plataforma</th><th>Zona</th>
+            <th>Póliza</th><th>Inicio Póliza</th><th>Fin Póliza</th><th>Incidencias</th><th>Garantías</th><th>Tickets</th><th></th>
+          </tr></thead>
+          <tbody id="proj-tbody"></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- ══ TICKETS ══ -->
+    <div id="tab-tickets" class="tab-panel">
+      <div class="section-header"><h2>Sistema de Tickets</h2><span class="badge-count" id="tkt-count">0</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="setTicketView('table')" id="tkt-view-table">Tabla</button>
+        <button class="btn btn-sm" onclick="setTicketView('kanban')" id="tkt-view-kanban">Kanban</button>
+      </div>
+      <div class="filters-bar">
+        <input type="search" class="filter-input search-input" id="tkt-search" placeholder="Buscar ticket, proyecto, cliente..." oninput="filterTickets()">
+        <select class="filter-select" id="tkt-status" onchange="filterTickets()"><option value="">Estatus</option><option>Abierto</option><option>En proceso</option><option>En espera de proveedor</option><option>En espera de cliente</option><option>Programado</option><option>Cerrado</option><option>Cancelado</option></select>
+        <select class="filter-select" id="tkt-prio" onchange="filterTickets()"><option value="">Prioridad</option><option>Critico</option><option>Alta</option><option>Intermedia</option><option>Baja</option></select>
+      </div>
+      <div id="tkt-table-view">
+        <div class="table-wrap"><div class="table-scroll">
+          <table id="tkt-table">
+            <thead><tr>
+              <th>ID</th><th>Proyecto</th><th>Cliente</th><th>Código Error</th><th>Prioridad</th>
+              <th>Responsable</th><th>Creación</th><th>Compromiso</th><th>Estatus</th><th>Días Abierto</th><th></th>
+            </tr></thead>
+            <tbody id="tkt-tbody"></tbody>
+          </table>
+        </div></div>
+      </div>
+      <div id="tkt-kanban-view" style="display:none">
+        <div class="kanban" id="kanban-board"></div>
+      </div>
+    </div>
+
+    <!-- ══ CALENDARIO ══ -->
+    <div id="tab-calendario" class="tab-panel">
+      <div class="section-header">
+        <h2>Calendario de Actividades</h2>
+        <span class="badge-count" id="cal-event-count">0</span>
+      </div>
+
+      <div id="cal-wrap">
+        <!-- Navigation header -->
+        <div class="cal-header">
+          <button class="btn btn-sm" onclick="calNav(-1)">◀</button>
+          <button class="btn btn-sm" onclick="calNav(-12)" title="Año anterior" style="font-size:11px">◀◀</button>
+          <h3 id="cal-month-title"></h3>
+          <button class="btn btn-sm" onclick="calNav(12)" title="Año siguiente" style="font-size:11px">▶▶</button>
+          <button class="btn btn-sm" onclick="calNav(1)">▶</button>
+          <button class="btn btn-sm" style="margin-left:4px" onclick="calGoToday()">Hoy</button>
+          <button class="btn btn-sm" onclick="calView='month';renderCalendar()" id="cal-btn-month">Mes</button>
+          <button class="btn btn-sm" onclick="calView='week';renderCalendar()" id="cal-btn-week">Semana</button>
+          <button class="btn btn-sm" onclick="calView='list';renderCalendar()" id="cal-btn-list">Lista</button>
+        </div>
+
+        <!-- Filters -->
+        <div class="cal-filters">
+          <select class="filter-select" id="cal-f-cliente" onchange="renderCalendar()">
+            <option value="">Todos los clientes</option>
+          </select>
+          <select class="filter-select" id="cal-f-proyecto" onchange="renderCalendar()">
+            <option value="">Todos los proyectos</option>
+          </select>
+          <select class="filter-select" id="cal-f-responsable" onchange="renderCalendar()">
+            <option value="">Todos los responsables</option>
+          </select>
+          <select class="filter-select" id="cal-f-zona" onchange="renderCalendar()">
+            <option value="">Todas las zonas</option>
+          </select>
+          <select class="filter-select" id="cal-f-prioridad" onchange="renderCalendar()">
+            <option value="">Todas las prioridades</option>
+            <option>Critico</option><option>Alta</option><option>Intermedia</option><option>Baja</option>
+          </select>
+          <button class="btn btn-sm" onclick="clearCalFilters()">✕ Limpiar</button>
+        </div>
+
+        <!-- Legend / toggles -->
+        <div class="cal-legend">
+          <span style="font-size:11px;font-weight:600;color:var(--gray-500);margin-right:4px">Mostrar:</span>
+          <span class="cal-legend-item active" id="leg-inc-critico" onclick="toggleCalLayer('inc-critico')">
+            <span class="cal-legend-dot" style="background:#EF4444"></span>Incidencias críticas
+          </span>
+          <span class="cal-legend-item active" id="leg-inc-alta" onclick="toggleCalLayer('inc-alta')">
+            <span class="cal-legend-dot" style="background:#F97316"></span>Inc. alta prioridad
+          </span>
+          <span class="cal-legend-item active" id="leg-tickets" onclick="toggleCalLayer('tickets')">
+            <span class="cal-legend-dot" style="background:#3B82F6"></span>Tickets (compromiso)
+          </span>
+          <span class="cal-legend-item active" id="leg-tickets-creacion" onclick="toggleCalLayer('tickets-creacion')">
+            <span class="cal-legend-dot" style="background:#8B5CF6"></span>Tickets (creación)
+          </span>
+          <span class="cal-legend-item active" id="leg-garantias" onclick="toggleCalLayer('garantias')">
+            <span class="cal-legend-dot" style="background:#22C55E"></span>Garantías (subida)
+          </span>
+          <span class="cal-legend-item active" id="leg-garantias-venc" onclick="toggleCalLayer('garantias-venc')">
+            <span class="cal-legend-dot" style="background:#DC2626"></span>Garantías (+30d)
+          </span>
+          <span class="cal-legend-item active" id="leg-polizas" onclick="toggleCalLayer('polizas')">
+            <span class="cal-legend-dot" style="background:#F59E0B"></span>Pólizas (vencimiento)
+          </span>
+          <span class="cal-legend-item active" id="leg-mantenimientos" onclick="toggleCalLayer('mantenimientos')">
+            <span class="cal-legend-dot" style="background:#0EA5E9"></span>Mantenimientos
+          </span>
+        </div>
+
+        <!-- Calendar grid -->
+        <div id="cal-day-names" class="cal-grid"></div>
+        <div id="cal-cells" class="cal-grid"></div>
+
+        <!-- List view container -->
+        <div id="cal-list-view" style="display:none"></div>
+      </div>
+
+      <!-- Summary strip below calendar -->
+      <div id="cal-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px"></div>
+    </div>
+
+    <!-- ══ REPORTES ══ -->
+    <div id="tab-reportes" class="tab-panel">
+      <div class="section-header"><h2>Reportes</h2></div>
+      <div class="filters-bar">
+        <input type="date" class="filter-input" id="rep-from" title="Desde">
+        <input type="date" class="filter-input" id="rep-to" title="Hasta">
+        <select class="filter-select" id="rep-cliente" onchange="renderReports()"><option value="">Todos los clientes</option></select>
+        <button class="btn btn-sm btn-primary" onclick="renderReports()">Generar</button>
+        <button class="btn btn-sm" onclick="exportReport()">⬇ Exportar CSV</button>
+      </div>
+      <div class="report-grid" id="report-grid"></div>
+      <div class="charts-row" id="rep-charts"></div>
+    </div>
+
+    <!-- ══ IMPORTAR ══ -->
+    <div id="tab-importar" class="tab-panel">
+      <div class="section-header"><h2>Importar desde Excel</h2></div>
+      <div class="alert alert-warn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Los datos importados se unificarán con los existentes por código de proyecto. Los registros actuales NO se borrarán.
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px">
+        <div class="chart-card">
+          <h3>Registro_PV Nuevo.xlsm</h3>
+          <div class="import-zone" onclick="document.getElementById('file-pv').click()">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p>Clic para seleccionar o arrastra el archivo .xlsm</p>
+            <p style="font-size:11px;margin-top:4px;color:#CBD5E1">Lee: Registro PV, Tabla de errores, GARANTIAS, Vigencia</p>
+            <input type="file" id="file-pv" accept=".xlsx,.xlsm" style="display:none" onchange="importFile(this,'pv')">
+          </div>
+          <div id="import-pv-status" style="margin-top:10px;font-size:12px;color:var(--gray-500)"></div>
+        </div>
+        <div class="chart-card">
+          <h3>Planeación de Mantenimientos</h3>
+          <div class="import-zone" onclick="document.getElementById('file-mant').click()">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p>Clic para seleccionar o arrastra el archivo .xlsx</p>
+            <p style="font-size:11px;margin-top:4px;color:#CBD5E1">Lee: pólizas, mantenimientos, proyectos</p>
+            <input type="file" id="file-mant" accept=".xlsx,.xlsm" style="display:none" onchange="importFile(this,'mant')">
+          </div>
+          <div id="import-mant-status" style="margin-top:10px;font-size:12px;color:var(--gray-500)"></div>
+        </div>
+      </div>
+      <div id="import-log" style="margin-top:20px;font-size:12px;color:var(--gray-500);background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);padding:14px;min-height:60px;font-family:var(--mono)">Esperando archivos...</div>
+    </div>
+  </div><!-- /content -->
+</main>
+</div><!-- /app -->
+
+<!-- ══ MODALS ══ -->
+<div id="modal-inc" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-inc-title">Nueva Incidencia</h3>
+      <button class="icon-btn" onclick="closeModal('modal-inc')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Plataforma</label><input class="form-control" id="fi-platform" list="plat-list" placeholder="SUNGROW, SOLIS, SMA..."></div>
+        <div class="form-group"><label>Sitio / Proyecto *</label><input class="form-control" id="fi-site" placeholder="Nombre del sitio" required></div>
+        <div class="form-group"><label>Cliente</label><input class="form-control" id="fi-client" list="client-list"></div>
+        <div class="form-group"><label>Código de proyecto</label><input class="form-control" id="fi-code" list="code-list"></div>
+        <div class="form-group"><label>Prioridad</label>
+          <select class="form-control" id="fi-priority"><option value="">—</option><option>Critico</option><option>Alta</option><option>Intermedia</option><option>Baja</option></select>
+        </div>
+        <div class="form-group"><label>Código de Error</label><input class="form-control" id="fi-errcode" placeholder="Ej: 14, 202, 2001" oninput="autoFillError()"></div>
+        <div class="form-group"><label>Clasificación (auto)</label><input class="form-control autocomplete-field" id="fi-class" readonly placeholder="Auto desde tabla"></div>
+        <div class="form-group"><label>Problema (auto)</label><input class="form-control autocomplete-field" id="fi-problem" readonly placeholder="Auto desde tabla"></div>
+        <div class="form-group full"><label>Causa Posible (auto)</label><input class="form-control autocomplete-field" id="fi-cause" readonly placeholder="Auto desde tabla"></div>
+        <div class="form-group full"><label>Solución (auto)</label><textarea class="form-control autocomplete-field" id="fi-solution" readonly rows="2" placeholder="Auto desde tabla"></textarea></div>
+        <div class="form-group full"><label>Notas de Monitoreo</label><textarea class="form-control" id="fi-notes" rows="3" placeholder="Descripción detallada..."></textarea></div>
+        <div class="form-group"><label>Fecha/Hora Incidencia</label><input type="datetime-local" class="form-control" id="fi-incdate"></div>
+        <div class="form-group"><label>Fecha Última Modificación</label><input type="datetime-local" class="form-control" id="fi-lastmod"></div>
+        <div class="form-group"><label>Alta de Ticket</label>
+          <select class="form-control" id="fi-ticket"><option>NO</option><option>SI</option></select>
+        </div>
+        <div class="form-group"><label>Fecha Ticket Plataforma</label><input type="date" class="form-control" id="fi-ticketdate"></div>
+        <div class="form-group full"><label>Responsable</label><input class="form-control" id="fi-responsible" placeholder="Nombre del responsable"></div>
+        <div class="form-group full"><label>Comentarios</label><textarea class="form-control" id="fi-comments" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-inc')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveIncidencia()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-warr" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-warr-title">Nueva Garantía</h3>
+      <button class="icon-btn" onclick="closeModal('modal-warr')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Proyecto *</label><input class="form-control" id="fw-project" list="proj-list-w"></div>
+        <div class="form-group"><label>Código de proyecto</label><input class="form-control" id="fw-code" list="code-list"></div>
+        <div class="form-group"><label>Equipo dañado</label><input class="form-control" id="fw-equipment"></div>
+        <div class="form-group"><label>Marca</label><input class="form-control" id="fw-brand"></div>
+        <div class="form-group"><label>Modelo</label><input class="form-control" id="fw-model"></div>
+        <div class="form-group"><label>SN del equipo</label><input class="form-control" id="fw-sn" style="font-family:var(--mono)"></div>
+        <div class="form-group full"><label>Error / Incidencia</label><textarea class="form-control" id="fw-error" rows="2"></textarea></div>
+        <div class="form-group"><label>Proveedor</label><input class="form-control" id="fw-supplier"></div>
+        <div class="form-group"><label>Contacto Proveedor</label><input class="form-control" id="fw-contact"></div>
+        <div class="form-group"><label>Ticket</label><input class="form-control" id="fw-ticket" style="font-family:var(--mono)"></div>
+        <div class="form-group"><label>Estatus</label>
+          <select class="form-control" id="fw-status">
+            <option>En espera de respuesta de distribuidior</option><option>En revisión</option>
+            <option>Apobada, por gestionar entrega</option><option>Aprobado</option><option>Rechazado</option><option>Cerrado</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Fecha de subida</label><input type="date" class="form-control" id="fw-date"></div>
+        <div class="form-group full"><label>Comentarios</label><textarea class="form-control" id="fw-comments" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-warr')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveWarranty()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-ticket" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-tkt-title">Nuevo Ticket</h3>
+      <button class="icon-btn" onclick="closeModal('modal-ticket')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Proyecto *</label><input class="form-control" id="ft-project" list="proj-list-t"></div>
+        <div class="form-group"><label>Código</label><input class="form-control" id="ft-code" list="code-list"></div>
+        <div class="form-group"><label>Cliente</label><input class="form-control" id="ft-client" list="client-list"></div>
+        <div class="form-group"><label>Incidencia relacionada</label><input class="form-control" id="ft-inc" placeholder="ID incidencia"></div>
+        <div class="form-group"><label>Código de error</label><input class="form-control" id="ft-errcode"></div>
+        <div class="form-group"><label>Prioridad</label>
+          <select class="form-control" id="ft-priority"><option>Alta</option><option>Critico</option><option>Intermedia</option><option>Baja</option></select>
+        </div>
+        <div class="form-group"><label>Responsable</label><input class="form-control" id="ft-responsible"></div>
+        <div class="form-group"><label>Tipo de atención</label>
+          <select class="form-control" id="ft-type"><option>Remota</option><option>Presencial</option><option>RMA</option><option>Programado</option></select>
+        </div>
+        <div class="form-group"><label>Fecha compromiso</label><input type="date" class="form-control" id="ft-due"></div>
+        <div class="form-group"><label>Estatus</label>
+          <select class="form-control" id="ft-status"><option>Abierto</option><option>En proceso</option><option>En espera de proveedor</option><option>En espera de cliente</option><option>Programado</option><option>Cerrado</option><option>Cancelado</option></select>
+        </div>
+        <div class="form-group full"><label>Comentarios</label><textarea class="form-control" id="ft-comments" rows="3"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-ticket')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveTicket()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-error" class="modal-overlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="modal-err-title">Nuevo Código de Error</h3>
+      <button class="icon-btn" onclick="closeModal('modal-error')"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Marca *</label><input class="form-control" id="fe-brand" placeholder="SUNGROW, SOLIS, HUAWEI, SMA..."></div>
+        <div class="form-group"><label>Código de Error *</label><input class="form-control" id="fe-code" style="font-family:var(--mono)"></div>
+        <div class="form-group"><label>Clasificación</label>
+          <select class="form-control" id="fe-class"><option>INVERSOR</option><option>STRING</option><option>COMUNICACIÓN</option><option>MEDIDOR</option><option>CONSTRUCCIÓN</option></select>
+        </div>
+        <div class="form-group"><label>Prioridad</label>
+          <select class="form-control" id="fe-priority"><option>Critico</option><option>Alta</option><option>Intermedia</option><option>Baja</option></select>
+        </div>
+        <div class="form-group full"><label>Problema</label><input class="form-control" id="fe-problem"></div>
+        <div class="form-group full"><label>Causa Posible</label><textarea class="form-control" id="fe-cause" rows="2"></textarea></div>
+        <div class="form-group full"><label>Solución</label><textarea class="form-control" id="fe-solution" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-error')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveError()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- datalists -->
+<datalist id="plat-list"><option>SUNGROW</option><option>SOLIS</option><option>HUAWEI</option><option>SMA</option><option>ENNEXOS</option><option>FUSION</option></datalist>
+<datalist id="client-list"></datalist>
+<datalist id="code-list"></datalist>
+<datalist id="proj-list-w"></datalist>
+<datalist id="proj-list-t"></datalist>
+
+<!-- ══ JAVASCRIPT ══ -->
+<script>
+// ════════════════════════════════════════════════════════
+//  DATA STORE — cargado desde localStorage o seed inicial
+// ════════════════════════════════════════════════════════
+const STORAGE_KEY = 'skypv_v1';
+let DB = loadDB();
+
+function loadDB(){
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if(s) return JSON.parse(s);
+  } catch(e){}
+  return getDefaultDB();
+}
+
+function saveDB(){
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); } catch(e){}
+}
+
+// Excel serial date → ISO string
+function excelDateToISO(n){
+  if(!n || isNaN(n)) return '';
+  const d = new Date((n - 25569) * 86400 * 1000);
+  return d.toISOString().slice(0,10);
+}
+
+function getDefaultDB(){
+  return {
+    incidencias: getSeedIncidencias(),
+    errores: getSeedErrores(),
+    garantias: getSeedGarantias(),
+    polizas: getSeedPolizas(),
+    proyectos: [],
+    tickets: getSeedTickets(),
+    eventos: []
+  };
+}
+
+// ── SEED DATA ──
+function getSeedIncidencias(){
+  return [
+    {id:1,platform:'SUNGROW',num:1,site:'ASUR Merida',client:'ASUR',code:'ASRO-MID03-FV00119',priority:'Alta',notes:'valle de producción',lastMod:'',incDate:'2025-11-20',days:0,errCode:'14',classification:'INVERSOR',problem:'SIN DATOS',cause:'Sobretensión sostenida de red',solution:'Verificar selección de código de red y medir voltaje AC; escalar con operador si persiste',ticketAlta:'SI',ticketDate:'2026-01-20',responsible:'',comments:''},
+    {id:2,platform:'SUNGROW',num:2,site:'Aeropuerto Internacional de Ciudad Juárez',client:'OMA',code:'OMAO-CJS02-FV00216',priority:'Alta',notes:'Sobre voltaje en la red y Anomalía en el inversor 6',lastMod:'',incDate:'2025-11-21',days:0,errCode:'',classification:'',problem:'',cause:'',solution:'',ticketAlta:'SI',ticketDate:'2025-10-03',responsible:'',comments:''},
+    {id:3,platform:'SUNGROW',num:3,site:'Aeropuerto Internacional de Culiacán',client:'OMA',code:'OMAO-CUL02-FV00215',priority:'Alta',notes:'Anomalías en inversor 3, 4 y 8',lastMod:'',incDate:'2025-11-07',days:0,errCode:'',classification:'',problem:'',cause:'',solution:'',ticketAlta:'SI',ticketDate:'2025-12-30',responsible:'',comments:''},
+    {id:4,platform:'SUNGROW',num:4,site:'Aeropuerto Internacional de Durango',client:'OMA',code:'OMAO-DGO02-FV00212',priority:'Alta',notes:'Reducción de generación en inversor 5, fuera de línea',lastMod:'2026-01-14',incDate:'2025-10-25',days:0,errCode:'15',classification:'INVERSOR',problem:'SIN DATOS',cause:'Tensión de red alta',solution:'Revisar tensión AC, calibre/longitud de cable y coordinación con operador de red',ticketAlta:'SI',ticketDate:'2025-12-09',responsible:'',comments:''},
+    {id:5,platform:'SUNGROW',num:5,site:'Aeropuerto Internacional de Torreón',client:'OMA',code:'OMAO-TRC02-FV00213',priority:'Alta',notes:'Anomalías en inversor 4 y 8 por posible sombra o suciedad',lastMod:'',incDate:'2025-11-14',days:0,errCode:'',classification:'',problem:'',cause:'',solution:'',ticketAlta:'NO',ticketDate:'',responsible:'',comments:''},
+    {id:6,platform:'SOLIS',num:23,site:'ASUR Merida COMEDOR',client:'ASUR',code:'ASRO-MID03-FV00119',priority:'Alta',notes:'Baja producción (manchas de Cemento)',lastMod:'',incDate:'',days:0,errCode:'1010',classification:'INVERSOR',problem:'SIN DATOS',cause:'Sobretensión de red',solution:'Confirmar estado de red, cables AC y configuración de norma de red',ticketAlta:'NO',ticketDate:'',responsible:'',comments:''},
+    {id:7,platform:'SOLIS',num:25,site:'ASUR Oaxaca',client:'ASUR',code:'ASRO-OAX01-FV00120',priority:'Alta',notes:'Con comunicación con inversores desde el 9 de abril, limitado',lastMod:'2026-01-12',incDate:'2025-11-22',days:0,errCode:'1012',classification:'INVERSOR',problem:'SIN DATOS',cause:'Sobrefrecuencia de red',solution:'Medir frecuencia y confirmar parámetros de red',ticketAlta:'SI',ticketDate:'',responsible:'',comments:''},
+    {id:8,platform:'ENNEXOS',num:18,site:'Aquamatic División Del Norte',client:'INDEPENDIENTE',code:'INDO-EDO04-FV05017',priority:'Critico',notes:'',lastMod:'2026-01-12',incDate:'',days:0,errCode:'202',classification:'COMUNICACIÓN',problem:'SIN DATOS',cause:'Red desconectada, cable AC dañado o tensión demasiado baja',solution:'Verificar breaker, cable AC y presencia de red',ticketAlta:'NO',ticketDate:'',responsible:'',comments:''},
+    {id:9,platform:'FUSION',num:68,site:'BIDASOA',client:'INDEPENDIENTE',code:'INDO-EDO41-FV05106',priority:'Alta',notes:'Se esta trabajando en conjunto con marca para limitación',lastMod:'2026-01-12',incDate:'',days:0,errCode:'2015',classification:'STRING',problem:'SIN DATOS',cause:'Pérdida de string por fusible, conector, seccionador o desconexión',solution:'Revisar continuidad, fusibles, conectores MC4 y entrada del MPPT',ticketAlta:'SI',ticketDate:'2026-02-10',responsible:'',comments:''},
+    {id:10,platform:'SOLIS',num:29,site:'Fantasías Miguel Cancún',client:'FANTASÍAS MIGUEL',code:'FTMO-MID09-FV00302',priority:'Alta',notes:'',lastMod:'2026-01-11',incDate:'2025-12-11',days:0,errCode:'1016',classification:'INVERSOR',problem:'SIN DATOS',cause:'Desequilibrio trifásico',solution:'Verificar balance y cableado de fases',ticketAlta:'SI',ticketDate:'2026-02-10',responsible:'',comments:''},
+  ];
+}
+
+function getSeedErrores(){
+  return [
+    {id:1,clave:'HUAWEI|2001',brand:'HUAWEI',code:'2001',classification:'STRING',problem:'SOBRETENSIÓN DC',cause:'Tensión elevada en string o diseño/configuración fuera de rango',solution:'Verificar Voc del arreglo, número de módulos por string y condiciones de temperatura; corregir diseño o conexión',priority:'Alta'},
+    {id:2,clave:'HUAWEI|2011',brand:'HUAWEI',code:'2011',classification:'STRING',problem:'INADECUADA CONEXIÓN',cause:'Polaridad invertida en string FV',solution:'Aislar string, corregir polaridad y revisar conectores antes de reconectar',priority:'Critico'},
+    {id:3,clave:'HUAWEI|2015',brand:'HUAWEI',code:'2015',classification:'STRING',problem:'SIN DATOS',cause:'Pérdida de string por fusible, conector, seccionador o desconexión',solution:'Revisar continuidad, fusibles, conectores MC4 y entrada del MPPT',priority:'Alta'},
+    {id:4,clave:'HUAWEI|2032',brand:'HUAWEI',code:'2032',classification:'COMUNICACIÓN',problem:'SIN DATOS',cause:'Falla de red, breaker AC abierto o cable AC desconectado',solution:'Verificar presencia de red, interruptor AC, cableado AC y parámetros de red',priority:'Critico'},
+    {id:5,clave:'HUAWEI|2033',brand:'HUAWEI',code:'2033',classification:'INVERSOR',problem:'SIN DATOS',cause:'Tensión de red por debajo del umbral permitido',solution:'Medir tensión AC, revisar cableado y coordinar con CFE/operador si la red está fuera de rango',priority:'Alta'},
+    {id:6,clave:'HUAWEI|2034',brand:'HUAWEI',code:'2034',classification:'INVERSOR',problem:'SIN DATOS',cause:'Sobretensión de red',solution:'Medir tensión AC, revisar caída de voltaje/cableado y coordinar ajuste con operador de red si aplica',priority:'Alta'},
+    {id:7,clave:'HUAWEI|2062',brand:'HUAWEI',code:'2062',classification:'STRING',problem:'INADECUADA CONEXIÓN',cause:'Baja resistencia de aislamiento o fuga a tierra en lado DC',solution:'Realizar prueba de aislamiento, inspeccionar strings, cajas combinadoras y cableado a tierra',priority:'Critico'},
+    {id:8,clave:'HUAWEI|2063',brand:'HUAWEI',code:'2063',classification:'INVERSOR',problem:'TEMPERATURA ALTA',cause:'Ventilación deficiente, radiación elevada o falla térmica',solution:'Revisar ventilación, limpieza, temperatura ambiente y operación de ventiladores',priority:'Alta'},
+    {id:9,clave:'HUAWEI|2064',brand:'HUAWEI',code:'2064',classification:'INVERSOR',problem:'ERROR DE INVERSOR INTERNO',cause:'Falla interna de hardware/electrónica de potencia',solution:'Reiniciar equipo si es seguro; si persiste, escalar a soporte del fabricante y preparar RMA',priority:'Critico'},
+    {id:10,clave:'SUNGROW|4',brand:'SUNGROW',code:'4',classification:'INVERSOR',problem:'SIN DATOS',cause:'Tensión de red baja o cableado AC deficiente',solution:'Medir tensión de red, revisar cableado AC y parámetros de protección',priority:'Alta'},
+    {id:11,clave:'SUNGROW|10',brand:'SUNGROW',code:'10',classification:'COMUNICACIÓN',problem:'SIN DATOS',cause:'Sin red, breaker AC disparado o cables AC flojos',solution:'Revisar breaker AC, conexión AC y disponibilidad de red',priority:'Critico'},
+    {id:12,clave:'SUNGROW|12',brand:'SUNGROW',code:'12',classification:'STRING',problem:'INADECUADA CONEXIÓN',cause:'Fuga a tierra en strings PV',solution:'Inspeccionar strings por falla a tierra y corregir aislamiento',priority:'Critico'},
+    {id:13,clave:'SUNGROW|14',brand:'SUNGROW',code:'14',classification:'INVERSOR',problem:'SIN DATOS',cause:'Sobretensión sostenida de red',solution:'Verificar selección de código de red y medir voltaje AC; escalar con operador si persiste',priority:'Alta'},
+    {id:14,clave:'SUNGROW|15',brand:'SUNGROW',code:'15',classification:'INVERSOR',problem:'SIN DATOS',cause:'Tensión de red alta',solution:'Revisar tensión AC, calibre/longitud de cable y coordinación con operador de red',priority:'Alta'},
+    {id:15,clave:'SUNGROW|28',brand:'SUNGROW',code:'28',classification:'STRING',problem:'INADECUADA CONEXIÓN',cause:'Polaridad invertida en entrada FV',solution:'Corregir polaridad y revisar conexionado del string',priority:'Critico'},
+    {id:16,clave:'SUNGROW|36',brand:'SUNGROW',code:'36',classification:'INVERSOR',problem:'TEMPERATURA ALTA',cause:'Radiador caliente por ambiente, sol directo o ventilación deficiente',solution:'Verificar temperatura ambiente, limpieza, sombra/ventilación y ventiladores',priority:'Alta'},
+    {id:17,clave:'SUNGROW|39',brand:'SUNGROW',code:'39',classification:'STRING',problem:'INADECUADA CONEXIÓN',cause:'Baja resistencia de aislamiento a tierra',solution:'Revisar puesta a tierra, strings y aislamiento DC',priority:'Critico'},
+    {id:18,clave:'SUNGROW|59',brand:'SUNGROW',code:'59',classification:'COMUNICACIÓN',problem:'EQUIPO BLOQUEADO',cause:'Falla de comunicación interna del equipo',solution:'Esperar autorrecuperación; si persiste, reiniciar y escalar a fabricante',priority:'Alta'},
+    {id:19,clave:'SUNGROW|70',brand:'SUNGROW',code:'70',classification:'INVERSOR',problem:'TEMPERATURA ALTA',cause:'Ventiladores bloqueados o defectuosos',solution:'Detener, aislar AC/DC, limpiar ductos y reemplazar ventiladores',priority:'Alta'},
+    {id:20,clave:'SUNGROW|84',brand:'SUNGROW',code:'84',classification:'MEDIDOR',problem:'INADECUADA CONFIGURACIÓN DE MEDIDOR',cause:'Conexión invertida en medidor o CT',solution:'Corregir polaridad/conexión del medidor y revisar configuración de potencia/CT',priority:'Intermedia'},
+    {id:21,clave:'SOLIS|1010',brand:'SOLIS',code:'1010',classification:'INVERSOR',problem:'SIN DATOS',cause:'Sobretensión de red',solution:'Confirmar estado de red, cables AC y configuración de norma de red',priority:'Alta'},
+    {id:22,clave:'SOLIS|1011',brand:'SOLIS',code:'1011',classification:'INVERSOR',problem:'SIN DATOS',cause:'Subtensión de red',solution:'Verificar tensión de red y cableado AC; revisar estándar de red configurado',priority:'Alta'},
+    {id:23,clave:'SOLIS|1012',brand:'SOLIS',code:'1012',classification:'INVERSOR',problem:'SIN DATOS',cause:'Sobrefrecuencia de red',solution:'Medir frecuencia y confirmar parámetros de red',priority:'Alta'},
+    {id:24,clave:'SOLIS|1013',brand:'SOLIS',code:'1013',classification:'INVERSOR',problem:'SIN DATOS',cause:'Subfrecuencia de red',solution:'Medir frecuencia y confirmar parámetros de red',priority:'Alta'},
+    {id:25,clave:'SOLIS|1014',brand:'SOLIS',code:'1014',classification:'INVERSOR',problem:'ERROR DE INVERSOR INTERNO',cause:'Corriente de retorno AC',solution:'Reiniciar inversor; si persiste, escalar a servicio del fabricante',priority:'Critico'},
+    {id:26,clave:'SOLIS|1015',brand:'SOLIS',code:'1015',classification:'COMUNICACIÓN',problem:'SIN DATOS',cause:'Sin red o conexión AC ausente',solution:'Confirmar conexión a red, normalidad de la red y ajuste de norma',priority:'Critico'},
+    {id:27,clave:'SOLIS|1016',brand:'SOLIS',code:'1016',classification:'INVERSOR',problem:'SIN DATOS',cause:'Desequilibrio trifásico',solution:'Verificar balance y cableado de fases',priority:'Alta'},
+    {id:28,clave:'SOLIS|1017',brand:'SOLIS',code:'1017',classification:'INVERSOR',problem:'SIN DATOS',cause:'Frecuencia de red anómala',solution:'Revisar frecuencia y calidad de red',priority:'Alta'},
+    {id:29,clave:'SOLIS|1018',brand:'SOLIS',code:'1018',classification:'INVERSOR',problem:'SIN DATOS',cause:'Sobreintensidad de salida a red',solution:'Verificar condiciones de red y salida AC del inversor',priority:'Alta'},
+    {id:30,clave:'SMA|101',brand:'SMA',code:'101',classification:'INVERSOR',problem:'SIN DATOS',cause:'Voltaje de red/impedancia demasiado alto',solution:'Verificar set de país, medir tensión en punto de conexión y coordinar con operador de red',priority:'Alta'},
+    {id:31,clave:'SMA|202',brand:'SMA',code:'202',classification:'COMUNICACIÓN',problem:'SIN DATOS',cause:'Red desconectada, cable AC dañado o tensión demasiado baja',solution:'Verificar breaker, cable AC y presencia de red',priority:'Critico'},
+    {id:32,clave:'SMA|301',brand:'SMA',code:'301',classification:'INVERSOR',problem:'SIN DATOS',cause:'Promedio de tensión de red fuera de rango',solution:'Medir tensión durante operación y coordinar con operador de red',priority:'Alta'},
+    {id:33,clave:'SMA|501',brand:'SMA',code:'501',classification:'INVERSOR',problem:'SIN DATOS',cause:'Frecuencia fuera de rango',solution:'Revisar frecuencia y coordinar con operador si fluctúa frecuentemente',priority:'Alta'},
+    {id:34,clave:'SMA|3401',brand:'SMA',code:'3401',classification:'STRING',problem:'SOBRETENSIÓN DC',cause:'Sobretensión en entrada DC',solution:'Desconectar fuentes, verificar tensión DC y selección de batería/arreglo',priority:'Critico'},
+    {id:35,clave:'SMA|8708',brand:'SMA',code:'8708',classification:'COMUNICACIÓN',problem:'SIN DATOS',cause:'Comunicación ausente con control del sistema',solution:'Verificar integridad de cableado y conectores del sistema de control',priority:'Alta'},
+  ];
+}
+
+function getSeedGarantias(){
+  return [
+    {id:1,project:'ACRILICO SABLON',code:'',equipment:'INVERSOR',brand:'SOLIS',model:'60K-HV',sn:'',error:'FAN Error',supplier:'EXEL SOLAR',contact:'Plataforma Exel',ticket:'178371',status:'En espera de respuesta de distribuidior',uploadDate:'2023-03-31',comments:''},
+    {id:2,project:'ASUR OAXACA',code:'',equipment:'INVERSOR',brand:'SOLIS',model:'60K-HV',sn:'',error:'No enciende el inversor',supplier:'EXEL SOLAR',contact:'Plataforma Exel',ticket:'177454',status:'En espera de respuesta de distribuidior',uploadDate:'2023-03-27',comments:''},
+    {id:3,project:'FM - TULTITLÁN',code:'',equipment:'INVERSOR',brand:'SOLIS',model:'60K-HV',sn:'',error:'No enciende el inversor',supplier:'EXEL SOLAR',contact:'Plataforma Exel',ticket:'',status:'En espera de respuesta de distribuidior',uploadDate:'',comments:''},
+    {id:4,project:'MECOAT LOTE 11',code:'',equipment:'INVERSOR',brand:'SOLIS',model:'60K-HV',sn:'',error:'FAN Error',supplier:'EXEL SOLAR',contact:'Plataforma Exel',ticket:'177310',status:'Apobada, por gestionar entrega',uploadDate:'',comments:'24'},
+    {id:5,project:'Centro Medico San Isidro',code:'',equipment:'Mal calibración de datos',brand:'SOLIS',model:'',sn:'',error:'Mala calibración de datos en equipos',supplier:'BAYWARE',contact:'Erik valdez- +52 33 3441 2399',ticket:'',status:'En revisión',uploadDate:'',comments:''},
+    {id:6,project:'Centro Médico Toluca',code:'',equipment:'Mal calibración de datos',brand:'SOLIS',model:'',sn:'',error:'Mala calibración de datos en equipos',supplier:'BAYWARE',contact:'Erik valdez- +52 33 3441 2399',ticket:'',status:'En revisión',uploadDate:'',comments:''},
+    {id:7,project:'ASUR-CREI',code:'',equipment:'Mal calibración de datos',brand:'SOLIS',model:'',sn:'',error:'Mala calibración de datos en equipos',supplier:'BAYWARE',contact:'Erik valdez- +52 33 3441 2399',ticket:'',status:'En revisión',uploadDate:'',comments:''},
+    {id:8,project:'ASUR-COMEDOR',code:'',equipment:'Mal calibración de datos',brand:'SOLIS',model:'',sn:'',error:'Mala calibración de datos en equipos',supplier:'BAYWARE',contact:'Erik valdez- +52 33 3441 2399',ticket:'',status:'En revisión',uploadDate:'',comments:''},
+    {id:9,project:'Axis Nave principal',code:'',equipment:'Mal calibración de datos',brand:'SOLIS',model:'',sn:'',error:'Mala calibración de datos en equipos',supplier:'BAYWARE',contact:'Erik valdez- +52 33 3441 2399',ticket:'',status:'En revisión',uploadDate:'',comments:''},
+    {id:10,project:'Agrobal',code:'',equipment:'EPM',brand:'SOLIS',model:'EPM5-plus',sn:'',error:'Firmware actualización',supplier:'EXEL SOLAR',contact:'Plataforma Exel',ticket:'178258',status:'En espera de respuesta de distribuidior',uploadDate:'',comments:''},
+    {id:11,project:'—',code:'',equipment:'',brand:'',model:'',sn:'',error:'Falta',supplier:'',contact:'',ticket:'177881',status:'Falta',uploadDate:'',comments:''},
+  ];
+}
+
+function getSeedPolizas(){
+  return [
+    {id:1,item:1,grupo:'ASUR',code:'ASRO-CUN01-BT00101',project:'T4',tarifa:'GDMTH',platform:'SKYCONTROL',sysStart:'2023-05-01',polStart:'2023-03-01',polEnd:'2033-04-01',status:'Vigente',poliza:'BESS',zona:'Quintana Roo',cuadrilla:'Península'},
+    {id:2,item:2,grupo:'ASUR',code:'ASRO-MID03-FV00119',project:'ASUR Mérida',tarifa:'GDMTH',platform:'SunGrow',sysStart:'2022-10-01',polStart:'2022-10-01',polEnd:'2032-09-01',status:'Vigente',poliza:'2 completos, 2 limpiezas',zona:'Yucatán',cuadrilla:'Península'},
+    {id:3,item:3,grupo:'ASUR',code:'ASRO-OAX01-FV00120',project:'ASUR Oaxaca',tarifa:'GDMTH',platform:'Solis',sysStart:'2023-04-01',polStart:'2023-04-01',polEnd:'2033-03-01',status:'Vigente',poliza:'COMPLETO',zona:'Oaxaca',cuadrilla:'Especial'},
+    {id:4,item:4,grupo:'OMA',code:'OMAO-DGO02-FV00212',project:'Aeropuerto Internacional de Durango',tarifa:'GDMTH',platform:'SunGrow',sysStart:'2021-09-01',polStart:'2021-09-01',polEnd:'2032-01-01',status:'Vigente',poliza:'COMPLETO',zona:'Durango',cuadrilla:'Especial'},
+    {id:5,item:5,grupo:'OMA',code:'OMAO-CJS02-FV00216',project:'Aeropuerto Internacional de Ciudad Juárez',tarifa:'GDMTH',platform:'SunGrow',sysStart:'2022-04-01',polStart:'2022-04-01',polEnd:'2032-03-01',status:'Vigente',poliza:'COMPLETO',zona:'Chihuahua',cuadrilla:'Especial'},
+    {id:6,item:6,grupo:'Fantasías Miguel',code:'FTMO-EDO13-FV00301',project:'Fantasías Miguel Tultitlan',tarifa:'GDMTH',platform:'Solis',sysStart:'2024-03-01',polStart:'2024-03-01',polEnd:'2025-03-01',status:'Vencida',poliza:'ELÉCTRICO',zona:'Estado de México',cuadrilla:'Tizayuca'},
+    {id:7,item:7,grupo:'Fantasías Miguel',code:'FTMO-MID09-FV00302',project:'Fantasías Miguel Cancún',tarifa:'GDMTH',platform:'Solis',sysStart:'2024-01-01',polStart:'2024-01-01',polEnd:'2025-02-01',status:'Vencida',poliza:'ELÉCTRICO',zona:'Quintana Roo',cuadrilla:'Península'},
+    {id:8,item:8,grupo:'Fantasías Miguel',code:'FTMO-CMX29-FV00303',project:'Fantasías Miguel Mariano Escobedo',tarifa:'GDMTH',platform:'Solis',sysStart:'2024-06-01',polStart:'2024-06-01',polEnd:'2026-01-01',status:'Vigente',poliza:'ELÉCTRICO',zona:'CDMX',cuadrilla:'Metropolitana'},
+    {id:9,item:9,grupo:'Foster Wheeler',code:'FOSO-HGO08-FV00801',project:'Formetax',tarifa:'GDMTH',platform:'Solis',sysStart:'2024-10-01',polStart:'2024-10-01',polEnd:'2027-09-01',status:'Vigente',poliza:'COMPLETO',zona:'Hidalgo',cuadrilla:'Tizayuca'},
+    {id:10,item:10,grupo:'Foster Wheeler',code:'FOSO-HGO09-FV00802',project:'Taller Foster Wheeler',tarifa:'GDMTH',platform:'Solis',sysStart:'2024-10-01',polStart:'2024-10-01',polEnd:'2027-09-01',status:'Vigente',poliza:'COMPLETO',zona:'Hidalgo',cuadrilla:'Tizayuca'},
+    {id:11,item:11,grupo:'Centro Médico',code:'MEDO-EDO24-FV01301',project:'CENTRO MEDICO TOLUCA',tarifa:'GDMTH',platform:'Fusion Solar',sysStart:'2025-04-01',polStart:'2025-03-01',polEnd:'2027-01-01',status:'Vigente',poliza:'COMPLETO',zona:'Estado de México',cuadrilla:'Metropolitana'},
+    {id:12,item:12,grupo:'Centro Médico',code:'MEDO-EDO25-FV01302',project:'MEDICA SAN ISIDRO',tarifa:'GDMTH',platform:'Solis',sysStart:'2025-03-01',polStart:'2025-03-01',polEnd:'2027-02-01',status:'Vigente',poliza:'COMPLETO',zona:'Estado de México',cuadrilla:'Metropolitana'},
+    {id:13,item:13,grupo:'SKY FUND',code:'PRKO-EDO27-FV01401',project:'CENTRUM PARK EDIFICIO B1',tarifa:'GDMTH',platform:'Fusion Solar',sysStart:'',polStart:'2025-06-01',polEnd:'2026-05-01',status:'Vigente',poliza:'GENERACIÓN',zona:'Estado de México',cuadrilla:'Metropolitana'},
+    {id:14,item:14,grupo:'Indep.',code:'INDO-HGO01-HB05001',project:'ALYSA',tarifa:'GDMTH',platform:'Solis',sysStart:'2024-03-01',polStart:'2024-07-01',polEnd:'2033-07-01',status:'Vigente',poliza:'COMPLETO',zona:'Hidalgo',cuadrilla:'Tizayuca'},
+    {id:15,item:15,grupo:'Indep.',code:'INDO-HGO02-FV05008',project:'MEXCOAT LOTE 10',tarifa:'GDMTH',platform:'Solis',sysStart:'2024-04-01',polStart:'2024-04-01',polEnd:'2026-03-01',status:'Vigente',poliza:'COMPLETO',zona:'Hidalgo',cuadrilla:'Tizayuca'},
+  ];
+}
+
+function getSeedTickets(){
+  return [
+    {id:'TKT-001',project:'ASUR Merida',code:'ASRO-MID03-FV00119',client:'ASUR',incId:1,errCode:'14',priority:'Alta',responsible:'Carlos M.',created:'2026-01-20',due:'2026-02-10',status:'En proceso',type:'Remota',comments:'Verificando voltaje AC con OMA',evidence:'',closed:'',totalTime:''},
+    {id:'TKT-002',project:'Aeropuerto Internacional de Durango',code:'OMAO-DGO02-FV00212',client:'OMA',incId:4,errCode:'15',priority:'Alta',responsible:'Ana G.',created:'2025-12-09',due:'2026-01-15',status:'En espera de proveedor',type:'Remota',comments:'Esperando respuesta de CFE',evidence:'',closed:'',totalTime:''},
+    {id:'TKT-003',project:'Aquamatic División Del Norte',code:'INDO-EDO04-FV05017',client:'INDEPENDIENTE',incId:8,errCode:'202',priority:'Critico',responsible:'Miguel R.',created:'2026-01-12',due:'2026-01-20',status:'Abierto',type:'Presencial',comments:'Visita programada',evidence:'',closed:'',totalTime:''},
+    {id:'TKT-004',project:'BIDASOA',code:'INDO-EDO41-FV05106',client:'INDEPENDIENTE',incId:9,errCode:'2015',priority:'Alta',responsible:'Laura T.',created:'2026-01-12',due:'2026-02-10',status:'Programado',type:'Presencial',comments:'En coordinación con marca',evidence:'',closed:'',totalTime:''},
+    {id:'TKT-005',project:'Fantasías Miguel Cancún',code:'FTMO-MID09-FV00302',client:'FANTASÍAS MIGUEL',incId:10,errCode:'1016',priority:'Alta',responsible:'Pedro L.',created:'2026-01-11',due:'2026-02-10',status:'En proceso',type:'Remota',comments:'',evidence:'',closed:'',totalTime:''},
+  ];
+}
+
+// ════════════════════════════════════════════════════════
+//  UTILITIES
+// ════════════════════════════════════════════════════════
+function daysBetween(d1, d2){
+  if(!d1||!d2) return null;
+  const a=new Date(d1), b=new Date(d2);
+  if(isNaN(a)||isNaN(b)) return null;
+  return Math.round((b-a)/86400000);
+}
+function today(){ return new Date().toISOString().slice(0,10); }
+function fmtDate(d){ if(!d) return '—'; try{ return new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'2-digit'}); } catch(e){ return d; } }
+function fmtDays(n){ if(n===null||n===undefined) return '—'; return n+'d'; }
+function nextId(arr){ return arr.length ? Math.max(...arr.map(x=>+x.id||0))+1 : 1; }
+function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function pBadge(p){
+  const map={Critico:'p-critico',Alta:'p-alta',Intermedia:'p-intermedia',Baja:'p-baja'};
+  const cls=map[p]||'p-none';
+  return p?`<span class="priority-badge ${cls}">${esc(p)}</span>`:'<span class="priority-badge p-none">—</span>';
+}
+function sBadge(s){
+  let cls='s-open';
+  if(/proceso/i.test(s)) cls='s-process';
+  else if(/espera|distribuidior/i.test(s)) cls='s-espera';
+  else if(/cerrado|closed|cancelled|cancelado/i.test(s)) cls='s-cancel';
+  else if(/apobada|aprobado|resuelto/i.test(s)) cls='s-aprobada';
+  else if(/falta/i.test(s)) cls='s-falta';
+  return `<span class="status-badge ${cls}">${esc(s||'—')}</span>`;
+}
+function polBadge(s){
+  if(/vencida/i.test(s)) return `<span class="priority-badge vencida"><span class="semaforo sem-rojo"></span>${esc(s)}</span>`;
+  if(/por vencer|prox/i.test(s)) return `<span class="priority-badge por-vencer"><span class="semaforo sem-amarillo"></span>${esc(s)}</span>`;
+  if(/vigente/i.test(s)) return `<span class="priority-badge vigente"><span class="semaforo sem-verde"></span>${esc(s)}</span>`;
+  return `<span class="priority-badge p-none">${esc(s||'—')}</span>`;
+}
+function polizaStatus(fin){
+  if(!fin) return 'Sin datos';
+  const d=new Date(fin), now=new Date();
+  const diff=daysBetween(today(), fin);
+  if(d<now) return 'Vencida';
+  if(diff<=60) return 'Por Vencer';
+  return 'Vigente';
+}
+function calcIncDays(r){
+  if(!r.incDate) return null;
+  return daysBetween(r.incDate, today());
+}
+function calcTicketDays(t){
+  if(!t.created) return null;
+  if(t.status==='Cerrado'&&t.closed) return daysBetween(t.created,t.closed);
+  return daysBetween(t.created, today());
+}
+
+// ── AUTOCOMPLETE ERROR ──
+function autoFillError(){
+  const code = document.getElementById('fi-errcode').value.trim();
+  const plat = document.getElementById('fi-platform').value.trim().toUpperCase();
+  if(!code){ clearAutoFill(); return; }
+  // Find by platform+code or just code
+  let match = DB.errores.find(e => e.brand.toUpperCase()===plat && String(e.code)===String(code));
+  if(!match) match = DB.errores.find(e => String(e.code)===String(code));
+  if(match){
+    document.getElementById('fi-class').value = match.classification;
+    document.getElementById('fi-problem').value = match.problem;
+    document.getElementById('fi-cause').value = match.cause;
+    document.getElementById('fi-solution').value = match.solution;
+    if(!document.getElementById('fi-priority').value || document.getElementById('fi-priority').value===''){
+      document.getElementById('fi-priority').value = match.priority;
+    }
+  } else { clearAutoFill(); }
+}
+function clearAutoFill(){
+  ['fi-class','fi-problem','fi-cause','fi-solution'].forEach(id=>{ document.getElementById(id).value=''; });
+}
+
+// ════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════
+let currentTab = 'dashboard';
+const TAB_META = {
+  dashboard:{title:'Dashboard',sub:'Resumen ejecutivo'},
+  incidencias:{title:'Registro de Incidencias PV',sub:'Monitoreo y control'},
+  errores:{title:'Tabla de Errores',sub:'Catálogo de códigos'},
+  garantias:{title:'Garantías de Equipos',sub:'Seguimiento RMA'},
+  polizas:{title:'Pólizas y Mantenimientos',sub:'Vigencia y programación'},
+  proyectos:{title:'Base de Proyectos',sub:'Registro maestro'},
+  tickets:{title:'Sistema de Tickets',sub:'Gestión de atención'},
+  calendario:{title:'Calendario',sub:'Actividades y eventos'},
+  reportes:{title:'Reportes',sub:'Análisis y exportación'},
+  importar:{title:'Importar Excel',sub:'Carga de datos'},
+};
+
+function showTab(tab){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes("'"+tab+"'")) n.classList.add('active');
+  });
+  const m = TAB_META[tab]||{title:tab,sub:''};
+  document.getElementById('page-title').textContent = m.title;
+  document.getElementById('page-sub').textContent = m.sub;
+  currentTab = tab;
+  closeMobile();
+  renderCurrentTab(tab);
+}
+
+function renderCurrentTab(tab){
+  if(tab==='dashboard') renderDashboard();
+  else if(tab==='incidencias') renderIncidencias();
+  else if(tab==='errores') renderErrors();
+  else if(tab==='garantias') renderWarranties();
+  else if(tab==='polizas') renderPolizas();
+  else if(tab==='proyectos') renderProjects();
+  else if(tab==='tickets') renderTickets();
+  else if(tab==='calendario') renderCalendar();
+  else if(tab==='reportes') renderReports();
+  updateDataLists();
+}
+
+function toggleMobile(){
+  document.getElementById('sidebar').classList.toggle('mobile-open');
+  document.getElementById('overlay').classList.toggle('visible');
+}
+function closeMobile(){
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('overlay').classList.remove('visible');
+}
+
+// ════════════════════════════════════════════════════════
+//  DASHBOARD
+// ════════════════════════════════════════════════════════
+let chartInstances = {};
+function renderDashboard(){
+  const inc = DB.incidencias;
+  const warr = DB.garantias;
+  const tkt = DB.tickets;
+  const pol = DB.polizas;
+
+  const criticos = inc.filter(r=>r.priority==='Critico').length;
+  const openTkt = tkt.filter(t=>t.status!=='Cerrado'&&t.status!=='Cancelado').length;
+  const overdueTkt = tkt.filter(t=>t.due&&t.status!=='Cerrado'&&new Date(t.due)<new Date()).length;
+  const warrActive = warr.filter(w=>!/cerrado/i.test(w.status)).length;
+  const polVig = pol.filter(p=>polizaStatus(p.polEnd)==='Vigente').length;
+  const polVen = pol.filter(p=>polizaStatus(p.polEnd)==='Vencida').length;
+  const polProx = pol.filter(p=>polizaStatus(p.polEnd)==='Por Vencer').length;
+  const avgDays = inc.filter(r=>r.incDate).map(r=>calcIncDays(r)||0);
+  const avgAtt = avgDays.length ? Math.round(avgDays.reduce((a,b)=>a+b,0)/avgDays.length) : 0;
+
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Proyectos registrados</div><div class="kpi-val c-sky">${pol.length}</div><div class="kpi-sub">en base de pólizas</div></div>
+    <div class="kpi"><div class="kpi-label">Incidencias activas</div><div class="kpi-val c-amber">${inc.length}</div><div class="kpi-sub">en monitoreo</div></div>
+    <div class="kpi"><div class="kpi-label">Incidencias críticas</div><div class="kpi-val c-red">${criticos}</div><div class="kpi-sub">prioridad máxima</div></div>
+    <div class="kpi"><div class="kpi-label">Tickets abiertos</div><div class="kpi-val c-orange">${openTkt}</div><div class="kpi-sub">${overdueTkt} vencidos</div></div>
+    <div class="kpi"><div class="kpi-label">Garantías activas</div><div class="kpi-val c-purple">${warrActive}</div><div class="kpi-sub">de ${warr.length} totales</div></div>
+    <div class="kpi"><div class="kpi-label">Pólizas vigentes</div><div class="kpi-val c-green">${polVig}</div><div class="kpi-sub">${polProx} por vencer</div></div>
+    <div class="kpi"><div class="kpi-label">Pólizas vencidas</div><div class="kpi-val c-red">${polVen}</div><div class="kpi-sub">requieren renovación</div></div>
+    <div class="kpi"><div class="kpi-label">Promedio días inc.</div><div class="kpi-val c-amber">${avgAtt}</div><div class="kpi-sub">días sin resolución</div></div>
+  `;
+
+  // Alerts
+  let alertsHtml = '';
+  if(overdueTkt>0) alertsHtml+=`<div class="alert alert-danger">⚠ ${overdueTkt} ticket(s) con fecha compromiso vencida. Revisar inmediatamente.</div>`;
+  if(polProx>0) alertsHtml+=`<div class="alert alert-warn">⏰ ${polProx} póliza(s) próxima(s) a vencer en los próximos 60 días.</div>`;
+  if(criticos>0) alertsHtml+=`<div class="alert alert-danger">🔴 ${criticos} incidencia(s) con prioridad CRÍTICA sin resolución.</div>`;
+  document.getElementById('alerts-area').innerHTML = alertsHtml;
+
+  // Charts row 1
+  document.getElementById('charts-row').innerHTML = `
+    <div class="chart-card"><h3>Incidencias por Prioridad</h3><div class="chart-wrap"><canvas id="ch-prio" role="img" aria-label="Incidencias por prioridad"></canvas></div></div>
+    <div class="chart-card"><h3>Incidencias por Plataforma</h3><div class="chart-wrap"><canvas id="ch-plat" role="img" aria-label="Incidencias por plataforma"></canvas></div></div>
+    <div class="chart-card"><h3>Estatus de Pólizas</h3><div class="chart-wrap"><canvas id="ch-pol" role="img" aria-label="Estatus de pólizas"></canvas></div></div>
+  `;
+  document.getElementById('charts-row2').innerHTML = `
+    <div class="chart-card"><h3>Estatus de Garantías</h3><div class="chart-wrap"><canvas id="ch-warr" role="img" aria-label="Estatus de garantías"></canvas></div></div>
+    <div class="chart-card"><h3>Tickets por Estatus</h3><div class="chart-wrap"><canvas id="ch-tkt" role="img" aria-label="Tickets por estatus"></canvas></div></div>
+    <div class="chart-card"><h3>Clasificación de Errores</h3><div class="chart-wrap"><canvas id="ch-class" role="img" aria-label="Clasificación de errores"></canvas></div></div>
+  `;
+
+  // Priority
+  const prioCount = {Critico:0,Alta:0,Intermedia:0,Baja:0};
+  inc.forEach(r=>{ if(prioCount[r.priority]!==undefined) prioCount[r.priority]++; else prioCount['Baja']++; });
+  mkChart('ch-prio','doughnut',Object.keys(prioCount),Object.values(prioCount),['#EF4444','#F97316','#F59E0B','#22C55E']);
+
+  // Platform
+  const platCount = {};
+  inc.forEach(r=>{ const p=r.platform||'Sin plataforma'; platCount[p]=(platCount[p]||0)+1; });
+  mkChart('ch-plat','bar',Object.keys(platCount),Object.values(platCount),['#0EA5E9','#8B5CF6','#F59E0B','#22C55E','#F97316','#EF4444']);
+
+  // Polizas
+  mkChart('ch-pol','doughnut',['Vigente','Por Vencer','Vencida'],[polVig,polProx,polVen],['#22C55E','#F59E0B','#EF4444']);
+
+  // Warranties
+  const warrCount = {};
+  warr.forEach(w=>{ warrCount[w.status]=(warrCount[w.status]||0)+1; });
+  mkChart('ch-warr','doughnut',Object.keys(warrCount),Object.values(warrCount),['#F59E0B','#0EA5E9','#22C55E','#EF4444','#94A3B8','#F97316']);
+
+  // Tickets by status
+  const tktCount = {};
+  tkt.forEach(t=>{ tktCount[t.status]=(tktCount[t.status]||0)+1; });
+  mkChart('ch-tkt','bar',Object.keys(tktCount),Object.values(tktCount),['#0EA5E9','#F59E0B','#8B5CF6','#EF4444','#22C55E','#94A3B8','#F97316']);
+
+  // Error classification from errores table
+  const classCount = {};
+  DB.errores.forEach(e=>{ classCount[e.classification]=(classCount[e.classification]||0)+1; });
+  mkChart('ch-class','bar',Object.keys(classCount),Object.values(classCount),['#0EA5E9','#8B5CF6','#F59E0B','#22C55E','#F97316']);
+}
+
+function mkChart(id,type,labels,data,colors){
+  if(chartInstances[id]){ chartInstances[id].destroy(); }
+  const ctx = document.getElementById(id);
+  if(!ctx) return;
+  const isBar = type==='bar';
+  chartInstances[id] = new Chart(ctx,{
+    type,
+    data:{
+      labels,
+      datasets:[{
+        data,
+        backgroundColor: colors.map(c=>c+(isBar?'CC':'DD')),
+        borderColor: colors,
+        borderWidth: isBar?0:2,
+        borderRadius: isBar?4:0,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{
+          display: type==='doughnut',
+          position:'right',
+          labels:{font:{size:11},boxWidth:12,padding:8}
+        },
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw}`}}
+      },
+      scales: isBar?{
+        x:{ticks:{color:'#64748B',font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:'#64748B',font:{size:11},stepSize:1},grid:{color:'rgba(0,0,0,.05)'}}
+      }:{}
+    }
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  INCIDENCIAS
+// ════════════════════════════════════════════════════════
+let sortState = {};
+function filterIncidencias(){ renderIncidencias(); }
+function renderIncidencias(){
+  const search = (document.getElementById('inc-search')||{}).value||'';
+  const plat = (document.getElementById('inc-plat')||{}).value||'';
+  const cliente = (document.getElementById('inc-cliente')||{}).value||'';
+  const prio = (document.getElementById('inc-prio')||{}).value||'';
+  const status = (document.getElementById('inc-status')||{}).value||'';
+
+  let data = DB.incidencias.filter(r=>{
+    if(plat&&r.platform!==plat) return false;
+    if(cliente&&r.client!==cliente) return false;
+    if(prio&&r.priority!==prio) return false;
+    if(status&&r.ticketAlta!==status) return false;
+    if(search){
+      const s=search.toLowerCase();
+      return (r.site||'').toLowerCase().includes(s)||(r.code||'').toLowerCase().includes(s)||(r.errCode||'').toLowerCase().includes(s)||(r.notes||'').toLowerCase().includes(s)||(r.client||'').toLowerCase().includes(s);
+    }
+    return true;
+  });
+
+  // Update filter dropdowns
+  const platSel = document.getElementById('inc-plat');
+  if(platSel&&!platSel.dataset.built){
+    const plats=[...new Set(DB.incidencias.map(r=>r.platform).filter(Boolean))];
+    plats.forEach(p=>{ if(!platSel.querySelector(`option[value="${p}"]`)){ const o=document.createElement('option');o.value=p;o.textContent=p;platSel.appendChild(o);} });
+    platSel.dataset.built='1';
+  }
+  const clientSel = document.getElementById('inc-cliente');
+  if(clientSel&&!clientSel.dataset.built){
+    const clients=[...new Set(DB.incidencias.map(r=>r.client).filter(Boolean))];
+    clients.forEach(c=>{ if(!clientSel.querySelector(`option[value="${c}"]`)){ const o=document.createElement('option');o.value=c;o.textContent=c;clientSel.appendChild(o);} });
+    clientSel.dataset.built='1';
+  }
+
+  const tbody = document.getElementById('inc-tbody');
+  document.getElementById('inc-count').textContent = data.length;
+  if(!data.length){ tbody.innerHTML=`<tr><td colspan="16" class="no-data">Sin incidencias que coincidan</td></tr>`; return; }
+  tbody.innerHTML = data.map(r=>{
+    const days = calcIncDays(r);
+    const rowCls = r.priority==='Critico'?'row-critico':r.priority==='Alta'?'row-alta':'';
+    return `<tr class="${rowCls}">
+      <td>${esc(r.platform||'—')}</td>
+      <td style="font-family:var(--mono);font-size:11px">${r.num||'—'}</td>
+      <td title="${esc(r.site)}" style="max-width:140px">${esc(r.site||'—')}</td>
+      <td>${esc(r.client||'—')}</td>
+      <td style="font-family:var(--mono);font-size:10px" title="${esc(r.code)}">${esc((r.code||'').slice(0,14))}</td>
+      <td>${pBadge(r.priority)}</td>
+      <td title="${esc(r.notes)}" style="max-width:150px">${esc((r.notes||'').slice(0,40))}${r.notes&&r.notes.length>40?'…':''}</td>
+      <td style="font-size:11px">${fmtDate(r.lastMod)}</td>
+      <td style="font-size:11px">${fmtDate(r.incDate)}</td>
+      <td style="font-weight:600;color:${days>30?'var(--red)':days>7?'var(--amber)':'var(--gray-600)'}">${fmtDays(days)}</td>
+      <td style="font-family:var(--mono)">${esc(r.errCode||'—')}</td>
+      <td><span class="tag-chip">${esc(r.classification||'—')}</span></td>
+      <td title="${esc(r.problem)}">${esc((r.problem||'—').slice(0,20))}</td>
+      <td title="${esc(r.solution)}">${esc((r.solution||'—').slice(0,30))}…</td>
+      <td>${r.ticketAlta==='SI'?'<span class="status-badge s-process">SI</span>':'<span style="font-size:11px;color:var(--gray-400)">NO</span>'}</td>
+      <td><div class="tbl-actions">
+        <button class="icon-btn" onclick="editIncidencia(${r.id})" title="Editar"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="icon-btn" onclick="newTicketFrom(${r.id})" title="Crear ticket"><svg viewBox="0 0 24 24"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg></button>
+        <button class="icon-btn" onclick="deleteRecord('incidencias',${r.id},'inc')" title="Eliminar"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════
+//  ERRORES
+// ════════════════════════════════════════════════════════
+function filterErrors(){ renderErrors(); }
+function renderErrors(){
+  const search=(document.getElementById('err-search')||{}).value||'';
+  const marca=(document.getElementById('err-marca')||{}).value||'';
+  const cls=(document.getElementById('err-class')||{}).value||'';
+  const prio=(document.getElementById('err-prio')||{}).value||'';
+  let data=DB.errores.filter(e=>{
+    if(marca&&e.brand!==marca) return false;
+    if(cls&&e.classification!==cls) return false;
+    if(prio&&e.priority!==prio) return false;
+    if(search){const s=search.toLowerCase();return (e.clave||'').toLowerCase().includes(s)||(e.code||'').toString().toLowerCase().includes(s)||(e.problem||'').toLowerCase().includes(s);}
+    return true;
+  });
+  document.getElementById('err-count').textContent = data.length;
+  const tbody=document.getElementById('err-tbody');
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="9" class="no-data">Sin errores</td></tr>`;return;}
+  tbody.innerHTML=data.map(e=>`<tr>
+    <td style="font-family:var(--mono);font-size:11px">${esc(e.clave)}</td>
+    <td><span class="tag-chip">${esc(e.brand)}</span></td>
+    <td style="font-family:var(--mono);font-weight:600">${esc(e.code)}</td>
+    <td><span class="tag-chip">${esc(e.classification)}</span></td>
+    <td title="${esc(e.problem)}">${esc(e.problem||'—')}</td>
+    <td title="${esc(e.cause)}" style="max-width:200px">${esc((e.cause||'').slice(0,50))}${e.cause&&e.cause.length>50?'…':''}</td>
+    <td title="${esc(e.solution)}" style="max-width:180px">${esc((e.solution||'').slice(0,45))}${e.solution&&e.solution.length>45?'…':''}</td>
+    <td>${pBadge(e.priority)}</td>
+    <td><div class="tbl-actions">
+      <button class="icon-btn" onclick="editError(${e.id})" title="Editar"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+      <button class="icon-btn" onclick="deleteRecord('errores',${e.id},'err')" title="Eliminar"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+    </div></td>
+  </tr>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+//  GARANTÍAS
+// ════════════════════════════════════════════════════════
+function filterWarranties(){ renderWarranties(); }
+function renderWarranties(){
+  const search=(document.getElementById('warr-search')||{}).value||'';
+  const st=(document.getElementById('warr-status')||{}).value||'';
+  const prov=(document.getElementById('warr-prov')||{}).value||'';
+  let data=DB.garantias.filter(w=>{
+    if(st&&w.status!==st) return false;
+    if(prov&&w.supplier!==prov) return false;
+    if(search){const s=search.toLowerCase();return (w.project||'').toLowerCase().includes(s)||(w.ticket||'').toString().toLowerCase().includes(s)||(w.brand||'').toLowerCase().includes(s)||(w.error||'').toLowerCase().includes(s);}
+    return true;
+  });
+  // build provider filter
+  const provSel=document.getElementById('warr-prov');
+  if(provSel&&!provSel.dataset.built){
+    const provs=[...new Set(DB.garantias.map(w=>w.supplier).filter(Boolean))];
+    provs.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;provSel.appendChild(o);});
+    provSel.dataset.built='1';
+  }
+  document.getElementById('warr-count').textContent=data.length;
+  document.getElementById('badge-warr').textContent=DB.garantias.filter(w=>!/cerrado/i.test(w.status)).length;
+  const tbody=document.getElementById('warr-tbody');
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="15" class="no-data">Sin garantías</td></tr>`;return;}
+  tbody.innerHTML=data.map(w=>{
+    const days=daysBetween(w.uploadDate,today());
+    const isOld=days!==null&&days>30;
+    return `<tr ${isOld?'style="background:#FFF5F5"':''}>
+      <td title="${esc(w.project)}">${esc((w.project||'—').slice(0,18))}</td>
+      <td style="font-family:var(--mono);font-size:10px">${esc((w.code||'').slice(0,14))}</td>
+      <td>${esc(w.equipment||'—')}</td>
+      <td><span class="tag-chip">${esc(w.brand||'—')}</span></td>
+      <td style="font-size:11px">${esc(w.model||'—')}</td>
+      <td style="font-family:var(--mono);font-size:10px">${esc(w.sn||'—')}</td>
+      <td title="${esc(w.error)}">${esc((w.error||'—').slice(0,30))}${w.error&&w.error.length>30?'…':''}</td>
+      <td>${esc(w.supplier||'—')}</td>
+      <td style="font-size:11px" title="${esc(w.contact)}">${esc((w.contact||'—').slice(0,20))}</td>
+      <td style="font-family:var(--mono)">${esc(w.ticket||'—')}</td>
+      <td>${sBadge(w.status)}</td>
+      <td style="font-size:11px">${fmtDate(w.uploadDate)}</td>
+      <td style="font-weight:600;color:${isOld?'var(--red)':'var(--gray-600)'}">${fmtDays(days)}</td>
+      <td title="${esc(w.comments)}">${esc((w.comments||'—').slice(0,20))}</td>
+      <td><div class="tbl-actions">
+        <button class="icon-btn" onclick="editWarranty(${w.id})"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="icon-btn" onclick="deleteRecord('garantias',${w.id},'warr')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════
+//  PÓLIZAS
+// ════════════════════════════════════════════════════════
+function filterPolizas(){ renderPolizas(); }
+function renderPolizas(){
+  const search=(document.getElementById('pol-search')||{}).value||'';
+  const st=(document.getElementById('pol-status')||{}).value||'';
+  const grupo=(document.getElementById('pol-grupo')||{}).value||'';
+  const zona=(document.getElementById('pol-zona')||{}).value||'';
+  let data=DB.polizas.map(p=>({...p, calcStatus:polizaStatus(p.polEnd)})).filter(p=>{
+    if(st&&p.calcStatus!==st) return false;
+    if(grupo&&p.grupo!==grupo) return false;
+    if(zona&&(p.cuadrilla||p.zona)!==zona) return false;
+    if(search){const s=search.toLowerCase();return (p.project||'').toLowerCase().includes(s)||(p.code||'').toLowerCase().includes(s)||(p.grupo||'').toLowerCase().includes(s);}
+    return true;
+  });
+  const gSel=document.getElementById('pol-grupo');
+  if(gSel&&!gSel.dataset.built){
+    const gs=[...new Set(DB.polizas.map(p=>p.grupo).filter(Boolean))];
+    gs.forEach(g=>{const o=document.createElement('option');o.value=g;o.textContent=g;gSel.appendChild(o);});
+    gSel.dataset.built='1';
+  }
+  document.getElementById('pol-count').textContent=data.length;
+  const tbody=document.getElementById('pol-tbody');
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="12" class="no-data">Sin pólizas</td></tr>`;return;}
+  tbody.innerHTML=data.map(p=>`<tr>
+    <td style="font-size:11px">${p.item||'—'}</td>
+    <td>${esc(p.grupo||'—')}</td>
+    <td style="font-family:var(--mono);font-size:10px" title="${esc(p.code)}">${esc((p.code||'').slice(0,16))}</td>
+    <td title="${esc(p.project)}">${esc((p.project||'—').slice(0,20))}</td>
+    <td style="font-size:11px">${esc(p.platform||'—')}</td>
+    <td style="font-size:11px">${fmtDate(p.sysStart)}</td>
+    <td style="font-size:11px">${fmtDate(p.polStart)}</td>
+    <td style="font-size:11px">${fmtDate(p.polEnd)}</td>
+    <td>${polBadge(p.calcStatus)}</td>
+    <td style="font-size:11px">${esc(p.poliza||'—')}</td>
+    <td style="font-size:11px">${esc(p.cuadrilla||p.zona||'—')}</td>
+    <td><div class="tbl-actions">
+      <button class="icon-btn" onclick="editPoliza(${p.id})"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+    </div></td>
+  </tr>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+//  PROYECTOS
+// ════════════════════════════════════════════════════════
+function buildProjectsFromData(){
+  const map = {};
+  DB.polizas.forEach(p=>{
+    const key=p.code||p.project;
+    if(!map[key]){
+      map[key]={code:p.code,name:p.project,grupo:p.grupo,platform:p.platform,zona:p.zona||p.cuadrilla,poliza:polizaStatus(p.polEnd),polStart:p.polStart,polEnd:p.polEnd,incidencias:0,garantias:0,tickets:0};
+    }
+  });
+  DB.incidencias.forEach(r=>{
+    const key=r.code||r.site;
+    if(!map[key]) map[key]={code:r.code,name:r.site,grupo:r.client,platform:r.platform,zona:'',poliza:'Sin datos',polStart:'',polEnd:'',incidencias:0,garantias:0,tickets:0};
+    map[key].incidencias=(map[key].incidencias||0)+1;
+  });
+  DB.garantias.forEach(w=>{
+    const key=w.code||w.project;
+    if(map[key]) map[key].garantias=(map[key].garantias||0)+1;
+  });
+  DB.tickets.forEach(t=>{
+    const key=t.code||t.project;
+    if(map[key]) map[key].tickets=(map[key].tickets||0)+1;
+  });
+  return Object.values(map);
+}
+
+function filterProjects(){ renderProjects(); }
+function renderProjects(){
+  const search=(document.getElementById('proj-search')||{}).value||'';
+  const grupo=(document.getElementById('proj-grupo')||{}).value||'';
+  const plat=(document.getElementById('proj-plat')||{}).value||'';
+  const est=(document.getElementById('proj-estatus')||{}).value||'';
+  const allProj=buildProjectsFromData();
+  let data=allProj.filter(p=>{
+    if(grupo&&p.grupo!==grupo) return false;
+    if(plat&&p.platform!==plat) return false;
+    if(est&&p.poliza!==est) return false;
+    if(search){const s=search.toLowerCase();return (p.code||'').toLowerCase().includes(s)||(p.name||'').toLowerCase().includes(s)||(p.grupo||'').toLowerCase().includes(s);}
+    return true;
+  });
+  // fill dropdowns
+  const gSel=document.getElementById('proj-grupo');
+  if(gSel&&!gSel.dataset.built){
+    const gs=[...new Set(allProj.map(p=>p.grupo).filter(Boolean))];
+    gs.forEach(g=>{const o=document.createElement('option');o.value=g;o.textContent=g;gSel.appendChild(o);});
+    gSel.dataset.built='1';
+  }
+  const pSel=document.getElementById('proj-plat');
+  if(pSel&&!pSel.dataset.built){
+    const ps=[...new Set(allProj.map(p=>p.platform).filter(Boolean))];
+    ps.forEach(pl=>{const o=document.createElement('option');o.value=pl;o.textContent=pl;pSel.appendChild(o);});
+    pSel.dataset.built='1';
+  }
+  document.getElementById('proj-count').textContent=data.length;
+  const tbody=document.getElementById('proj-tbody');
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="12" class="no-data">Sin proyectos</td></tr>`;return;}
+  tbody.innerHTML=data.map((p,i)=>`<tr>
+    <td style="font-family:var(--mono);font-size:10px">${esc(p.code||'Código pendiente')}</td>
+    <td title="${esc(p.name)}">${esc((p.name||'—').slice(0,22))}</td>
+    <td>${esc(p.grupo||'—')}</td>
+    <td style="font-size:11px">${esc(p.platform||'—')}</td>
+    <td style="font-size:11px">${esc(p.zona||'—')}</td>
+    <td>${polBadge(p.poliza||'Sin datos')}</td>
+    <td style="font-size:11px">${fmtDate(p.polStart)}</td>
+    <td style="font-size:11px">${fmtDate(p.polEnd)}</td>
+    <td><span class="badge-count">${p.incidencias}</span></td>
+    <td><span class="badge-count">${p.garantias}</span></td>
+    <td><span class="badge-count">${p.tickets}</span></td>
+    <td></td>
+  </tr>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+//  TICKETS
+// ════════════════════════════════════════════════════════
+let ticketView='table';
+function setTicketView(v){ ticketView=v; document.getElementById('tkt-table-view').style.display=v==='table'?'':'none'; document.getElementById('tkt-kanban-view').style.display=v==='kanban'?'':'none'; renderTickets(); }
+function filterTickets(){ renderTickets(); }
+function renderTickets(){
+  const search=(document.getElementById('tkt-search')||{}).value||'';
+  const st=(document.getElementById('tkt-status')||{}).value||'';
+  const prio=(document.getElementById('tkt-prio')||{}).value||'';
+  let data=DB.tickets.filter(t=>{
+    if(st&&t.status!==st) return false;
+    if(prio&&t.priority!==prio) return false;
+    if(search){const s=search.toLowerCase();return (t.id||'').toLowerCase().includes(s)||(t.project||'').toLowerCase().includes(s)||(t.client||'').toLowerCase().includes(s);}
+    return true;
+  });
+  document.getElementById('tkt-count').textContent=data.length;
+  if(ticketView==='table'){
+    const tbody=document.getElementById('tkt-tbody');
+    if(!data.length){tbody.innerHTML=`<tr><td colspan="11" class="no-data">Sin tickets</td></tr>`;return;}
+    tbody.innerHTML=data.map(t=>{
+      const days=calcTicketDays(t);
+      const overdue=t.due&&t.status!=='Cerrado'&&new Date(t.due)<new Date();
+      return `<tr ${overdue?'style="background:#FFF5F5"':''}>
+        <td style="font-family:var(--mono);font-weight:700;font-size:11px">${esc(t.id)}</td>
+        <td title="${esc(t.project)}">${esc((t.project||'—').slice(0,18))}</td>
+        <td>${esc(t.client||'—')}</td>
+        <td style="font-family:var(--mono)">${esc(t.errCode||'—')}</td>
+        <td>${pBadge(t.priority)}</td>
+        <td>${esc(t.responsible||'—')}</td>
+        <td style="font-size:11px">${fmtDate(t.created)}</td>
+        <td style="font-size:11px;color:${overdue?'var(--red)':'inherit'}">${fmtDate(t.due)}${overdue?' ⚠':''}</td>
+        <td>${sBadge(t.status)}</td>
+        <td style="font-weight:600;color:${days>7?'var(--red)':days>3?'var(--amber)':'var(--gray-600)'}">${fmtDays(days)}</td>
+        <td><div class="tbl-actions">
+          <button class="icon-btn" onclick="editTicket('${t.id}')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button class="icon-btn" onclick="deleteRecord('tickets','${t.id}','tkt')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+        </div></td>
+      </tr>`;
+    }).join('');
+  } else {
+    const statuses=['Abierto','En proceso','En espera de proveedor','En espera de cliente','Programado','Cerrado','Cancelado'];
+    const colors={'Abierto':'#0EA5E9','En proceso':'#F59E0B','En espera de proveedor':'#8B5CF6','En espera de cliente':'#F97316','Programado':'#22C55E','Cerrado':'#94A3B8','Cancelado':'#EF4444'};
+    document.getElementById('kanban-board').innerHTML=statuses.map(s=>{
+      const tks=data.filter(t=>t.status===s);
+      return `<div class="kanban-col">
+        <div class="kanban-hdr" style="border-top:3px solid ${colors[s]||'#94A3B8'}">
+          <span>${s}</span><span class="badge-count">${tks.length}</span>
+        </div>
+        <div class="kanban-body">${tks.map(t=>`
+          <div class="ticket-card" onclick="editTicket('${t.id}')">
+            <div class="tc-id">${t.id}</div>
+            <div class="tc-title">${esc(t.project||'Sin proyecto')}</div>
+            <div class="tc-footer">${pBadge(t.priority)}<span style="font-size:10px;color:var(--gray-400)">${fmtDate(t.due)}</span></div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  CALENDARIO — versión completa con filtros y capas
+// ════════════════════════════════════════════════════════
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let calView = 'month'; // 'month' | 'week' | 'list'
+
+// Active layers (toggleable via legend)
+const calLayers = {
+  'inc-critico': true,
+  'inc-alta': true,
+  'tickets': true,
+  'tickets-creacion': true,
+  'garantias': true,
+  'garantias-venc': true,
+  'polizas': true,
+  'mantenimientos': true,
+};
+
+function toggleCalLayer(key) {
+  calLayers[key] = !calLayers[key];
+  const el = document.getElementById('leg-' + key);
+  if (el) el.classList.toggle('active', calLayers[key]);
+  renderCalendar();
+}
+
+function calNav(d) {
+  calMonth += d;
+  while (calMonth < 0) { calMonth += 12; calYear--; }
+  while (calMonth > 11) { calMonth -= 12; calYear++; }
+  renderCalendar();
+}
+
+function calGoToday() {
+  calYear = new Date().getFullYear();
+  calMonth = new Date().getMonth();
+  renderCalendar();
+}
+
+function clearCalFilters() {
+  ['cal-f-cliente','cal-f-proyecto','cal-f-responsable','cal-f-zona','cal-f-prioridad'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderCalendar();
+}
+
+// Build the event list from current DB + filters
+function buildCalEvents() {
+  const fCliente     = (document.getElementById('cal-f-cliente')     || {}).value || '';
+  const fProyecto    = (document.getElementById('cal-f-proyecto')    || {}).value || '';
+  const fResponsable = (document.getElementById('cal-f-responsable') || {}).value || '';
+  const fZona        = (document.getElementById('cal-f-zona')        || {}).value || '';
+  const fPrioridad   = (document.getElementById('cal-f-prioridad')   || {}).value || '';
+
+  const events = {}; // dateStr → [ {label, cls, type, detail} ]
+
+  function addEvt(dateStr, label, cls, type, detail) {
+    if (!dateStr || dateStr.length < 10) return;
+    const d = dateStr.slice(0, 10);
+    if (!events[d]) events[d] = [];
+    events[d].push({ label, cls, type, detail });
+  }
+
+  // ── INCIDENCIAS ──
+  if (calLayers['inc-critico'] || calLayers['inc-alta']) {
+    DB.incidencias.filter(r => {
+      if (fCliente && r.client !== fCliente) return false;
+      if (fProyecto && r.site !== fProyecto && r.code !== fProyecto) return false;
+      if (fPrioridad && r.priority !== fPrioridad) return false;
+      return true;
+    }).forEach(r => {
+      const isCrit = r.priority === 'Critico';
+      const isAlta = r.priority === 'Alta';
+      if (isCrit && calLayers['inc-critico'] && r.incDate) {
+        addEvt(r.incDate,
+          `🔴 ${r.site || r.code}`.slice(0, 28),
+          'evt-inc-critico', 'inc-critico',
+          { title: 'Incidencia Crítica', proyecto: r.site, cliente: r.client, prioridad: r.priority,
+            plataforma: r.platform, error: r.errCode, problema: r.problem, fecha: r.incDate,
+            dias: calcIncDays(r) != null ? calcIncDays(r) + 'd' : '—' });
+      }
+      if (isAlta && calLayers['inc-alta'] && r.incDate) {
+        addEvt(r.incDate,
+          `🟠 ${r.site || r.code}`.slice(0, 28),
+          'evt-inc-alta', 'inc-alta',
+          { title: 'Incidencia Alta', proyecto: r.site, cliente: r.client, prioridad: r.priority,
+            plataforma: r.platform, error: r.errCode, problema: r.problem, fecha: r.incDate,
+            dias: calcIncDays(r) != null ? calcIncDays(r) + 'd' : '—' });
+      }
+    });
+  }
+
+  // ── TICKETS — fecha compromiso ──
+  if (calLayers['tickets']) {
+    DB.tickets.filter(t => {
+      if (fCliente && t.client !== fCliente) return false;
+      if (fProyecto && t.project !== fProyecto && t.code !== fProyecto) return false;
+      if (fResponsable && t.responsible !== fResponsable) return false;
+      if (fPrioridad && t.priority !== fPrioridad) return false;
+      return t.due && t.status !== 'Cerrado' && t.status !== 'Cancelado';
+    }).forEach(t => {
+      const overdue = new Date(t.due) < new Date();
+      const cls = overdue ? 'evt-ticket-vencido'
+        : t.status === 'En proceso' ? 'evt-ticket-proceso'
+        : t.status === 'Programado' ? 'evt-ticket-programado'
+        : 'evt-ticket-abierto';
+      const icon = overdue ? '⚠️' : t.status === 'Programado' ? '📅' : '🎫';
+      addEvt(t.due,
+        `${icon} ${t.id} ${t.project || ''}`.slice(0, 28),
+        cls, 'ticket',
+        { title: 'Ticket — Fecha Compromiso', id: t.id, proyecto: t.project,
+          cliente: t.client, responsable: t.responsible, prioridad: t.priority,
+          estatus: t.status, creacion: t.created, compromiso: t.due,
+          dias: calcTicketDays(t) != null ? calcTicketDays(t) + 'd abierto' : '—',
+          comentarios: t.comments });
+    });
+  }
+
+  // ── TICKETS — fecha de creación ──
+  if (calLayers['tickets-creacion']) {
+    DB.tickets.filter(t => {
+      if (fCliente && t.client !== fCliente) return false;
+      if (fProyecto && t.project !== fProyecto && t.code !== fProyecto) return false;
+      if (fResponsable && t.responsible !== fResponsable) return false;
+      if (fPrioridad && t.priority !== fPrioridad) return false;
+      return !!t.created;
+    }).forEach(t => {
+      addEvt(t.created,
+        `🆕 ${t.id} ${t.project || ''}`.slice(0, 28),
+        'evt-ticket-abierto', 'ticket-creacion',
+        { title: 'Ticket — Fecha de Creación', id: t.id, proyecto: t.project,
+          cliente: t.client, responsable: t.responsible, prioridad: t.priority,
+          estatus: t.status, creacion: t.created, compromiso: t.due || '—' });
+    });
+  }
+
+  // ── GARANTÍAS — fecha de subida ──
+  if (calLayers['garantias']) {
+    DB.garantias.filter(w => {
+      if (fCliente) {
+        const pol = DB.polizas.find(p => p.project === w.project || p.code === w.code);
+        if (pol && pol.grupo !== fCliente) return false;
+      }
+      if (fProyecto && w.project !== fProyecto) return false;
+      return w.uploadDate && !/cerrado/i.test(w.status);
+    }).forEach(w => {
+      addEvt(w.uploadDate,
+        `🛡 ${w.project} — ${w.brand}`.slice(0, 28),
+        'evt-garantia', 'garantia',
+        { title: 'Garantía — Fecha de Subida', proyecto: w.project, equipo: w.equipment,
+          marca: w.brand, modelo: w.model, error: w.error, proveedor: w.supplier,
+          ticket: w.ticket, estatus: w.status, subida: w.uploadDate,
+          dias: daysBetween(w.uploadDate, today()) != null ? daysBetween(w.uploadDate, today()) + 'd' : '—' });
+    });
+  }
+
+  // ── GARANTÍAS VENCIDAS (>30d sin cierre) ──
+  if (calLayers['garantias-venc']) {
+    DB.garantias.filter(w => {
+      if (fProyecto && w.project !== fProyecto) return false;
+      const d = daysBetween(w.uploadDate, today());
+      return d !== null && d > 30 && !/cerrado/i.test(w.status);
+    }).forEach(w => {
+      addEvt(w.uploadDate,
+        `⏰ ${w.project} >30d sin cierre`.slice(0, 28),
+        'evt-garantia-vencida', 'garantia-vencida',
+        { title: 'Garantía Atrasada (+30d)', proyecto: w.project, equipo: w.equipment,
+          marca: w.brand, error: w.error, proveedor: w.supplier,
+          ticket: w.ticket, estatus: w.status,
+          dias: daysBetween(w.uploadDate, today()) + 'd sin cierre' });
+    });
+  }
+
+  // ── PÓLIZAS — fecha de vencimiento ──
+  if (calLayers['polizas']) {
+    DB.polizas.filter(p => {
+      if (fCliente && p.grupo !== fCliente) return false;
+      if (fProyecto && p.project !== fProyecto) return false;
+      if (fZona && (p.zona || p.cuadrilla) !== fZona) return false;
+      return p.polEnd;
+    }).forEach(p => {
+      const st = polizaStatus(p.polEnd);
+      const cls = st === 'Vencida' ? 'evt-poliza-vencida' : 'evt-poliza-vencer';
+      const icon = st === 'Vencida' ? '🔴' : '⏰';
+      if (st === 'Vencida' || st === 'Por Vencer') {
+        addEvt(p.polEnd,
+          `${icon} Póliza ${p.project || p.code}`.slice(0, 28),
+          cls, 'poliza',
+          { title: 'Póliza — Vencimiento', proyecto: p.project, cliente: p.grupo,
+            codigo: p.code, plataforma: p.platform, zona: p.zona || p.cuadrilla,
+            inicio: p.polStart, fin: p.polEnd, estatus: st, tipo: p.poliza,
+            diasRestantes: daysBetween(today(), p.polEnd) != null ? daysBetween(today(), p.polEnd) + 'd' : 'Vencida' });
+      }
+    });
+  }
+
+  // ── MANTENIMIENTOS (generado desde pólizas vigentes, usando inicio de póliza como referencia de mantenimiento) ──
+  if (calLayers['mantenimientos']) {
+    DB.polizas.filter(p => {
+      if (fCliente && p.grupo !== fCliente) return false;
+      if (fProyecto && p.project !== fProyecto) return false;
+      if (fZona && (p.zona || p.cuadrilla) !== fZona) return false;
+      return polizaStatus(p.polEnd) === 'Vigente' && p.polStart;
+    }).forEach(p => {
+      // Show the maintenance anniversary each year (annual maintenance)
+      const startDate = new Date(p.polStart);
+      const thisYearMant = new Date(calYear, startDate.getMonth(), startDate.getDate()).toISOString().slice(0,10);
+      const nextYearMant = new Date(calYear+1, startDate.getMonth(), startDate.getDate()).toISOString().slice(0,10);
+      [thisYearMant, nextYearMant].forEach(d => {
+        const past = new Date(d) < new Date();
+        addEvt(d,
+          `🔧 Mant. ${p.project || p.code}`.slice(0, 28),
+          'evt-mant', 'mantenimiento',
+          { title: past ? 'Mantenimiento (Ejecutado/Pasado)' : 'Mantenimiento Programado',
+            proyecto: p.project, cliente: p.grupo, zona: p.zona || p.cuadrilla,
+            plataforma: p.platform, tipo: p.poliza, fecha: d,
+            estatus: past ? 'Ejecutado / verificar' : 'Programado' });
+      });
+    });
+  }
+
+  return events;
+}
+
+function renderCalendar() {
+  // Build filter dropdowns (once)
+  buildCalFilterOptions();
+
+  const events = buildCalEvents();
+
+  // Count all events
+  let total = 0;
+  Object.values(events).forEach(evts => { total += evts.length; });
+  const countEl = document.getElementById('cal-event-count');
+  if (countEl) countEl.textContent = total;
+
+  // Update view button styles
+  ['month','week','list'].forEach(v => {
+    const b = document.getElementById('cal-btn-' + v);
+    if (b) b.style.background = calView === v ? 'var(--sky)' : '';
+    if (b) b.style.color = calView === v ? 'white' : '';
+    if (b) b.style.borderColor = calView === v ? 'var(--sky-dark)' : '';
+  });
+
+  if (calView === 'list') {
+    renderCalList(events);
+    document.getElementById('cal-day-names').style.display = 'none';
+    document.getElementById('cal-cells').style.display = 'none';
+    document.getElementById('cal-list-view').style.display = 'block';
+  } else if (calView === 'week') {
+    renderCalWeek(events);
+    document.getElementById('cal-day-names').style.display = '';
+    document.getElementById('cal-cells').style.display = '';
+    document.getElementById('cal-list-view').style.display = 'none';
+  } else {
+    renderCalMonth(events);
+    document.getElementById('cal-day-names').style.display = '';
+    document.getElementById('cal-cells').style.display = '';
+    document.getElementById('cal-list-view').style.display = 'none';
+  }
+
+  renderCalSummary(events);
+}
+
+function renderCalMonth(events) {
+  const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  document.getElementById('cal-month-title').textContent = `${MONTHS[calMonth]} ${calYear}`;
+  document.getElementById('cal-day-names').innerHTML = DAYS.map(d => `<div class="cal-day-name">${d}</div>`).join('');
+
+  const first = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const todayStr = today();
+
+  let cells = '';
+  for (let i = 0; i < first; i++) cells += `<div class="cal-cell weekend"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = ds === todayStr;
+    const evts = events[ds] || [];
+    const dow = (first + d - 1) % 7;
+    const isWeekend = dow === 0 || dow === 6;
+    cells += `<div class="cal-cell${isWeekend?' weekend':''}">
+      <div class="cal-date${isToday?' today':''}">${d}</div>
+      ${evts.slice(0, 4).map(e => `
+        <div class="cal-event ${e.cls}" title="${esc(e.label)}" onclick='showCalDetail(${JSON.stringify(JSON.stringify(e.detail))},event)'>
+          ${esc(e.label)}
+        </div>`).join('')}
+      ${evts.length > 4 ? `<div style="font-size:9px;color:var(--gray-400);padding:0 3px;cursor:pointer" onclick="calView='list';renderCalendar()">+${evts.length-4} más</div>` : ''}
+    </div>`;
+  }
+  // Fill remaining cells
+  const total = first + daysInMonth;
+  const rem = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let i = 0; i < rem; i++) cells += `<div class="cal-cell weekend"></div>`;
+  document.getElementById('cal-cells').innerHTML = cells;
+}
+
+function renderCalWeek(events) {
+  const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const todayStr = today();
+  // Find the start of the current week (Sunday)
+  const todayDate = new Date(calYear, calMonth, 1);
+  const weekStart = new Date(todayDate);
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+
+  document.getElementById('cal-month-title').textContent =
+    `Semana del ${weekStart.toLocaleDateString('es-MX',{day:'2-digit',month:'short'})}`;
+
+  const dayNames = [];
+  const cells = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const ds = d.toISOString().slice(0,10);
+    const isToday = ds === todayStr;
+    const evts = events[ds] || [];
+    dayNames.push(`<div class="cal-day-name${isToday?' active':''}" style="${isToday?'color:var(--sky);font-weight:800':''}">${DAYS[i]} ${d.getDate()}</div>`);
+    cells.push(`<div class="cal-cell" style="min-height:160px">
+      ${evts.map(e => `
+        <div class="cal-event ${e.cls}" title="${esc(e.label)}" onclick='showCalDetail(${JSON.stringify(JSON.stringify(e.detail))},event)'>
+          ${esc(e.label)}
+        </div>`).join('')}
+    </div>`);
+  }
+  document.getElementById('cal-day-names').innerHTML = dayNames.join('');
+  document.getElementById('cal-cells').innerHTML = cells.join('');
+}
+
+function renderCalList(events) {
+  const container = document.getElementById('cal-list-view');
+  // Gather all dates with events, sorted
+  const dates = Object.keys(events).filter(d => events[d].length > 0).sort();
+  if (!dates.length) {
+    container.innerHTML = `<div class="no-data" style="padding:40px">Sin eventos para los filtros seleccionados</div>`;
+    return;
+  }
+  const todayStr = today();
+  let html = '<div style="padding:12px;display:flex;flex-direction:column;gap:8px">';
+  dates.forEach(ds => {
+    const evts = events[ds];
+    const isToday = ds === todayStr;
+    const isPast = ds < todayStr;
+    const dateLabel = new Date(ds + 'T12:00:00').toLocaleDateString('es-MX', {weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+    html += `<div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="min-width:130px;text-align:right;padding-top:4px">
+        <div style="font-size:12px;font-weight:700;color:${isToday?'var(--sky)':isPast?'var(--gray-400)':'var(--gray-700)'}">${dateLabel.split(',')[0]}</div>
+        <div style="font-size:11px;color:var(--gray-400)">${ds}</div>
+        ${isToday?`<span style="font-size:10px;background:var(--sky);color:white;border-radius:4px;padding:1px 6px">HOY</span>`:''}
+      </div>
+      <div style="flex:1;border-left:2px solid ${isToday?'var(--sky)':isPast?'var(--gray-200)':'var(--gray-300)'};padding-left:12px;display:flex;flex-direction:column;gap:4px">
+        ${evts.map(e => `<div class="cal-event ${e.cls}" style="display:block;white-space:normal;max-width:100%;cursor:pointer"
+          onclick='showCalDetail(${JSON.stringify(JSON.stringify(e.detail))},event)'>${esc(e.label)}</div>`).join('')}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderCalSummary(events) {
+  const counts = {
+    'Incidencias críticas':0, 'Inc. alta prior.':0,
+    'Tickets compromisos':0, 'Tickets creados':0,
+    'Garantías':0, 'Garantías atrasadas':0,
+    'Vencimientos póliza':0, 'Mantenimientos':0
+  };
+  const typeMap = {
+    'inc-critico':'Incidencias críticas', 'inc-alta':'Inc. alta prior.',
+    'ticket':'Tickets compromisos', 'ticket-creacion':'Tickets creados',
+    'garantia':'Garantías', 'garantia-vencida':'Garantías atrasadas',
+    'poliza':'Vencimientos póliza', 'mantenimiento':'Mantenimientos'
+  };
+  Object.values(events).forEach(evts => evts.forEach(e => {
+    const k = typeMap[e.type];
+    if (k) counts[k]++;
+  }));
+  const colors = {
+    'Incidencias críticas':'var(--red)', 'Inc. alta prior.':'var(--orange)',
+    'Tickets compromisos':'#3B82F6', 'Tickets creados':'var(--purple)',
+    'Garantías':'var(--green)', 'Garantías atrasadas':'var(--red)',
+    'Vencimientos póliza':'var(--amber)', 'Mantenimientos':'var(--sky)'
+  };
+  document.getElementById('cal-summary').innerHTML = Object.entries(counts).map(([k,v]) => `
+    <div class="kpi" style="padding:12px">
+      <div class="kpi-label" style="font-size:10px">${k}</div>
+      <div class="kpi-val" style="font-size:22px;color:${colors[k]||'var(--sky)'}">${v}</div>
+    </div>`).join('');
+}
+
+// Build filter dropdowns from current data
+function buildCalFilterOptions() {
+  const cSel = document.getElementById('cal-f-cliente');
+  if (cSel && !cSel.dataset.built) {
+    const clients = [...new Set(DB.incidencias.map(r=>r.client).concat(DB.polizas.map(p=>p.grupo)).concat(DB.tickets.map(t=>t.client)).filter(Boolean))].sort();
+    clients.forEach(c => { const o=document.createElement('option');o.value=c;o.textContent=c;cSel.appendChild(o); });
+    cSel.dataset.built='1';
+  }
+  const pSel = document.getElementById('cal-f-proyecto');
+  if (pSel && !pSel.dataset.built) {
+    const projs = [...new Set(DB.polizas.map(p=>p.project).concat(DB.incidencias.map(r=>r.site)).concat(DB.tickets.map(t=>t.project)).filter(Boolean))].sort();
+    projs.forEach(p => { const o=document.createElement('option');o.value=p;o.textContent=p;pSel.appendChild(o); });
+    pSel.dataset.built='1';
+  }
+  const rSel = document.getElementById('cal-f-responsable');
+  if (rSel && !rSel.dataset.built) {
+    const resps = [...new Set(DB.tickets.map(t=>t.responsible).filter(Boolean))].sort();
+    resps.forEach(r => { const o=document.createElement('option');o.value=r;o.textContent=r;rSel.appendChild(o); });
+    rSel.dataset.built='1';
+  }
+  const zSel = document.getElementById('cal-f-zona');
+  if (zSel && !zSel.dataset.built) {
+    const zonas = [...new Set(DB.polizas.map(p=>p.zona||p.cuadrilla).filter(Boolean))].sort();
+    zonas.forEach(z => { const o=document.createElement('option');o.value=z;o.textContent=z;zSel.appendChild(o); });
+    zSel.dataset.built='1';
+  }
+}
+
+// Popup detail panel
+let calDetailPopup = null;
+function showCalDetail(detailJson, evt) {
+  const detail = JSON.parse(detailJson);
+  if (!calDetailPopup) {
+    calDetailPopup = document.createElement('div');
+    calDetailPopup.className = 'cal-detail-popup';
+    calDetailPopup.innerHTML = `
+      <div class="cdp-header">
+        <h4 id="cdp-title">Detalle</h4>
+        <button class="icon-btn" style="color:white;border-color:rgba(255,255,255,.2)" onclick="closeCalDetail()">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="cdp-body" id="cdp-body"></div>`;
+    document.body.appendChild(calDetailPopup);
+    document.addEventListener('click', e => {
+      if (calDetailPopup && !calDetailPopup.contains(e.target)) closeCalDetail();
+    }, true);
+  }
+  document.getElementById('cdp-title').textContent = detail.title || 'Detalle';
+  const skip = ['title'];
+  const labels = {
+    proyecto:'Proyecto', cliente:'Cliente', id:'ID Ticket', responsable:'Responsable',
+    prioridad:'Prioridad', estatus:'Estatus', creacion:'Fecha creación',
+    compromiso:'Fecha compromiso', fecha:'Fecha', dias:'Días', plataforma:'Plataforma',
+    error:'Código error', problema:'Problema', equipo:'Equipo', marca:'Marca',
+    modelo:'Modelo', sn:'No. Serie', proveedor:'Proveedor', ticket:'Ticket ref.',
+    subida:'Fecha subida', codigo:'Código', zona:'Zona / Cuadrilla',
+    inicio:'Inicio póliza', fin:'Fin póliza', tipo:'Tipo póliza',
+    diasRestantes:'Días restantes', comentarios:'Comentarios'
+  };
+  document.getElementById('cdp-body').innerHTML = Object.entries(detail)
+    .filter(([k]) => !skip.includes(k) && detail[k])
+    .map(([k,v]) => `<div class="cdp-row"><div class="cdp-label">${labels[k]||k}</div><div class="cdp-val">${esc(String(v))}</div></div>`)
+    .join('');
+
+  // Position popup near click
+  const popup = calDetailPopup;
+  popup.classList.add('open');
+  popup.style.display = 'block';
+  const x = evt.clientX + 10;
+  const y = evt.clientY - 10;
+  const pw = 320, ph = 300;
+  popup.style.left = (x + pw > window.innerWidth ? x - pw - 20 : x) + 'px';
+  popup.style.top  = (y + ph > window.innerHeight ? y - ph : y) + 'px';
+  evt.stopPropagation();
+}
+
+function closeCalDetail() {
+  if (calDetailPopup) calDetailPopup.style.display = 'none';
+}
+
+// ════════════════════════════════════════════════════════
+//  REPORTES
+// ════════════════════════════════════════════════════════
+function renderReports(){
+  const inc=DB.incidencias, tkt=DB.tickets, warr=DB.garantias, pol=DB.polizas;
+  const byClient={};
+  inc.forEach(r=>{ const c=r.client||'Sin cliente'; byClient[c]=(byClient[c]||0)+1; });
+  const topClient=Object.entries(byClient).sort((a,b)=>b[1]-a[1]).slice(0,1);
+  const openTkt=tkt.filter(t=>t.status!=='Cerrado'&&t.status!=='Cancelado');
+  const avgTktDays=openTkt.length?Math.round(openTkt.map(t=>calcTicketDays(t)||0).reduce((a,b)=>a+b,0)/openTkt.length):0;
+  const warrActive=warr.filter(w=>!/cerrado/i.test(w.status)).length;
+  const polVen=pol.filter(p=>polizaStatus(p.polEnd)==='Vencida').length;
+
+  document.getElementById('report-grid').innerHTML=`
+    <div class="report-card"><h4>Incidencias por proyecto</h4><p>${inc.length} total — Cliente con más: ${topClient[0]?topClient[0][0]:'—'} (${topClient[0]?topClient[0][1]:0})</p></div>
+    <div class="report-card"><h4>Tickets abiertos</h4><p>${openTkt.length} tickets activos — Promedio ${avgTktDays} días</p></div>
+    <div class="report-card"><h4>Garantías activas</h4><p>${warrActive} en proceso — ${warr.length} total</p></div>
+    <div class="report-card"><h4>Pólizas vencidas</h4><p>${polVen} pólizas requieren renovación</p></div>
+    <div class="report-card"><h4>Errores más repetidos</h4><p>${getTopErrors()}</p></div>
+    <div class="report-card"><h4>Mantenimientos pendientes</h4><p>${pol.filter(p=>polizaStatus(p.polEnd)==='Por Vencer').length} pólizas por vencer en 60 días</p></div>
+  `;
+
+  // Client chart
+  document.getElementById('rep-charts').innerHTML=`
+    <div class="chart-card"><h3>Incidencias por cliente</h3><div class="chart-wrap"><canvas id="ch-rep1" role="img" aria-label="Incidencias por cliente"></canvas></div></div>
+    <div class="chart-card"><h3>Top errores más comunes</h3><div class="chart-wrap"><canvas id="ch-rep2" role="img" aria-label="Top errores"></canvas></div></div>
+  `;
+  const clientLabels=Object.keys(byClient).slice(0,8);
+  const clientVals=clientLabels.map(c=>byClient[c]);
+  mkChart('ch-rep1','bar',clientLabels,clientVals,['#0EA5E9','#8B5CF6','#F59E0B','#22C55E','#F97316','#EF4444','#06B6D4','#EC4899']);
+
+  const errCount={};
+  inc.forEach(r=>{ if(r.errCode) errCount[r.errCode]=(errCount[r.errCode]||0)+1; });
+  const topErrs=Object.entries(errCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  mkChart('ch-rep2','bar',topErrs.map(e=>e[0]),topErrs.map(e=>e[1]),['#0EA5E9','#8B5CF6','#F59E0B','#22C55E','#F97316','#EF4444','#06B6D4','#EC4899']);
+
+  // Fill client select
+  const cSel=document.getElementById('rep-cliente');
+  if(cSel&&!cSel.dataset.built){
+    Object.keys(byClient).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;cSel.appendChild(o);});
+    cSel.dataset.built='1';
+  }
+}
+function getTopErrors(){
+  const errCount={};
+  DB.incidencias.forEach(r=>{ if(r.errCode) errCount[r.errCode]=(errCount[r.errCode]||0)+1; });
+  const top=Object.entries(errCount).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  return top.length ? top.map(e=>`Cód ${e[0]} (${e[1]})`).join(', ') : 'Sin datos';
+}
+function exportReport(){
+  const rows=[['Tipo','Valor','Detalle']];
+  DB.incidencias.forEach(r=>rows.push(['Incidencia',r.site,r.priority+' — '+r.errCode]));
+  DB.tickets.forEach(t=>rows.push(['Ticket',t.id,t.status+' — '+t.project]));
+  DB.garantias.forEach(w=>rows.push(['Garantía',w.project,w.status+' — '+w.ticket]));
+  downloadCSV(rows,'reporte_pv_'+today()+'.csv');
+}
+
+// ════════════════════════════════════════════════════════
+//  CRUD OPERATIONS
+// ════════════════════════════════════════════════════════
+let editingId = null;
+let editingType = null;
+
+function openNew(){
+  const map={incidencias:'modal-inc',garantias:'modal-warr',tickets:'modal-ticket',errores:'modal-error'};
+  const modal=map[currentTab];
+  if(!modal) return;
+  editingId=null; editingType=currentTab;
+  const titles={incidencias:'Nueva Incidencia',garantias:'Nueva Garantía',tickets:'Nuevo Ticket',errores:'Nuevo Código de Error'};
+  document.getElementById(modal.replace('modal-','modal-')+'title')||document.getElementById('modal-'+currentTab.slice(0,-1)+'-title')||document.getElementById('modal-inc-title');
+  if(currentTab==='incidencias') document.getElementById('modal-inc-title').textContent='Nueva Incidencia';
+  if(currentTab==='garantias') document.getElementById('modal-warr-title').textContent='Nueva Garantía';
+  if(currentTab==='tickets') document.getElementById('modal-tkt-title').textContent='Nuevo Ticket';
+  if(currentTab==='errores') document.getElementById('modal-err-title').textContent='Nuevo Código de Error';
+  clearForm(modal);
+  if(currentTab==='garantias') document.getElementById('fw-date').value=today();
+  if(currentTab==='tickets') document.getElementById('ft-created').value=today();
+  openModal(modal);
+}
+
+function clearForm(modal){
+  document.querySelectorAll(`#${modal} input, #${modal} select, #${modal} textarea`).forEach(el=>{ if(el.tagName!=='BUTTON') el.value=''; });
+}
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); editingId=null; }
+
+// INCIDENCIAS
+function editIncidencia(id){
+  const r=DB.incidencias.find(x=>x.id===id); if(!r) return;
+  editingId=id; editingType='incidencias';
+  document.getElementById('modal-inc-title').textContent='Editar Incidencia';
+  document.getElementById('fi-platform').value=r.platform||'';
+  document.getElementById('fi-site').value=r.site||'';
+  document.getElementById('fi-client').value=r.client||'';
+  document.getElementById('fi-code').value=r.code||'';
+  document.getElementById('fi-priority').value=r.priority||'';
+  document.getElementById('fi-errcode').value=r.errCode||'';
+  document.getElementById('fi-class').value=r.classification||'';
+  document.getElementById('fi-problem').value=r.problem||'';
+  document.getElementById('fi-cause').value=r.cause||'';
+  document.getElementById('fi-solution').value=r.solution||'';
+  document.getElementById('fi-notes').value=r.notes||'';
+  document.getElementById('fi-incdate').value=r.incDate||'';
+  document.getElementById('fi-lastmod').value=r.lastMod||'';
+  document.getElementById('fi-ticket').value=r.ticketAlta||'NO';
+  document.getElementById('fi-ticketdate').value=r.ticketDate||'';
+  document.getElementById('fi-responsible').value=r.responsible||'';
+  document.getElementById('fi-comments').value=r.comments||'';
+  openModal('modal-inc');
+}
+
+function saveIncidencia(){
+  const site=document.getElementById('fi-site').value.trim();
+  if(!site){alert('El campo Sitio es obligatorio');return;}
+  const rec={
+    id:editingId||nextId(DB.incidencias),
+    platform:document.getElementById('fi-platform').value.trim(),
+    num:editingId?(DB.incidencias.find(x=>x.id===editingId)||{}).num||'':DB.incidencias.length+1,
+    site, client:document.getElementById('fi-client').value.trim(),
+    code:document.getElementById('fi-code').value.trim(),
+    priority:document.getElementById('fi-priority').value,
+    errCode:document.getElementById('fi-errcode').value.trim(),
+    classification:document.getElementById('fi-class').value.trim(),
+    problem:document.getElementById('fi-problem').value.trim(),
+    cause:document.getElementById('fi-cause').value.trim(),
+    solution:document.getElementById('fi-solution').value.trim(),
+    notes:document.getElementById('fi-notes').value.trim(),
+    incDate:document.getElementById('fi-incdate').value,
+    lastMod:document.getElementById('fi-lastmod').value||new Date().toISOString().slice(0,16),
+    ticketAlta:document.getElementById('fi-ticket').value,
+    ticketDate:document.getElementById('fi-ticketdate').value,
+    responsible:document.getElementById('fi-responsible').value.trim(),
+    comments:document.getElementById('fi-comments').value.trim(),
+    days:0,
+  };
+  if(editingId){const i=DB.incidencias.findIndex(x=>x.id===editingId);DB.incidencias[i]=rec;}
+  else DB.incidencias.push(rec);
+  saveDB(); closeModal('modal-inc'); renderIncidencias(); updateBadges();
+}
+
+// WARRANTIES
+function editWarranty(id){
+  const w=DB.garantias.find(x=>x.id===id); if(!w) return;
+  editingId=id; editingType='garantias';
+  document.getElementById('modal-warr-title').textContent='Editar Garantía';
+  ['project','code','equipment','brand','model','sn','error','supplier','contact','ticket','status','comments'].forEach(f=>{ document.getElementById('fw-'+f).value=w[f]||''; });
+  document.getElementById('fw-date').value=w.uploadDate||'';
+  openModal('modal-warr');
+}
+function saveWarranty(){
+  const proj=document.getElementById('fw-project').value.trim();
+  if(!proj){alert('El campo Proyecto es obligatorio');return;}
+  const rec={
+    id:editingId||nextId(DB.garantias),
+    project:proj, code:document.getElementById('fw-code').value.trim(),
+    equipment:document.getElementById('fw-equipment').value.trim(),
+    brand:document.getElementById('fw-brand').value.trim(),
+    model:document.getElementById('fw-model').value.trim(),
+    sn:document.getElementById('fw-sn').value.trim(),
+    error:document.getElementById('fw-error').value.trim(),
+    supplier:document.getElementById('fw-supplier').value.trim(),
+    contact:document.getElementById('fw-contact').value.trim(),
+    ticket:document.getElementById('fw-ticket').value.trim(),
+    status:document.getElementById('fw-status').value,
+    uploadDate:document.getElementById('fw-date').value,
+    comments:document.getElementById('fw-comments').value.trim(),
+  };
+  if(editingId){const i=DB.garantias.findIndex(x=>x.id===editingId);DB.garantias[i]=rec;}
+  else DB.garantias.push(rec);
+  saveDB(); closeModal('modal-warr'); renderWarranties(); updateBadges();
+}
+
+// ERRORS
+function editError(id){
+  const e=DB.errores.find(x=>x.id===id); if(!e) return;
+  editingId=id; editingType='errores';
+  document.getElementById('modal-err-title').textContent='Editar Código de Error';
+  document.getElementById('fe-brand').value=e.brand||'';
+  document.getElementById('fe-code').value=e.code||'';
+  document.getElementById('fe-class').value=e.classification||'INVERSOR';
+  document.getElementById('fe-priority').value=e.priority||'Alta';
+  document.getElementById('fe-problem').value=e.problem||'';
+  document.getElementById('fe-cause').value=e.cause||'';
+  document.getElementById('fe-solution').value=e.solution||'';
+  openModal('modal-error');
+}
+function saveError(){
+  const brand=document.getElementById('fe-brand').value.trim();
+  const code=document.getElementById('fe-code').value.trim();
+  if(!brand||!code){alert('Marca y Código son obligatorios');return;}
+  const rec={
+    id:editingId||nextId(DB.errores),
+    brand, code, clave:`${brand}|${code}`,
+    classification:document.getElementById('fe-class').value,
+    priority:document.getElementById('fe-priority').value,
+    problem:document.getElementById('fe-problem').value.trim(),
+    cause:document.getElementById('fe-cause').value.trim(),
+    solution:document.getElementById('fe-solution').value.trim(),
+  };
+  // check dup
+  if(!editingId && DB.errores.find(e=>e.clave===rec.clave)){alert('Ya existe un código con esa clave: '+rec.clave);return;}
+  if(editingId){const i=DB.errores.findIndex(x=>x.id===editingId);DB.errores[i]=rec;}
+  else DB.errores.push(rec);
+  saveDB(); closeModal('modal-error'); renderErrors();
+}
+
+// TICKETS
+let editingTicketId = null;
+function newTicketFrom(incId){
+  const r=DB.incidencias.find(x=>x.id===incId); if(!r) return;
+  editingTicketId=null;
+  document.getElementById('modal-tkt-title').textContent='Nuevo Ticket';
+  document.getElementById('ft-project').value=r.site||'';
+  document.getElementById('ft-code').value=r.code||'';
+  document.getElementById('ft-client').value=r.client||'';
+  document.getElementById('ft-inc').value=incId;
+  document.getElementById('ft-errcode').value=r.errCode||'';
+  document.getElementById('ft-priority').value=r.priority||'Alta';
+  document.getElementById('ft-responsible').value=r.responsible||'';
+  document.getElementById('ft-due').value='';
+  document.getElementById('ft-status').value='Abierto';
+  document.getElementById('ft-type').value='Remota';
+  document.getElementById('ft-comments').value=r.notes||'';
+  openModal('modal-ticket');
+}
+function editTicket(id){
+  const t=DB.tickets.find(x=>x.id===id); if(!t) return;
+  editingTicketId=id;
+  document.getElementById('modal-tkt-title').textContent='Editar Ticket';
+  document.getElementById('ft-project').value=t.project||'';
+  document.getElementById('ft-code').value=t.code||'';
+  document.getElementById('ft-client').value=t.client||'';
+  document.getElementById('ft-inc').value=t.incId||'';
+  document.getElementById('ft-errcode').value=t.errCode||'';
+  document.getElementById('ft-priority').value=t.priority||'Alta';
+  document.getElementById('ft-responsible').value=t.responsible||'';
+  document.getElementById('ft-due').value=t.due||'';
+  document.getElementById('ft-status').value=t.status||'Abierto';
+  document.getElementById('ft-type').value=t.type||'Remota';
+  document.getElementById('ft-comments').value=t.comments||'';
+  openModal('modal-ticket');
+}
+function saveTicket(){
+  const proj=document.getElementById('ft-project').value.trim();
+  if(!proj){alert('Proyecto es obligatorio');return;}
+  const status=document.getElementById('ft-status').value;
+  const now=today();
+  const id=editingTicketId||('TKT-'+String(nextId(DB.tickets.map(t=>({id:parseInt(t.id.replace('TKT-',''))||0})))).padStart(3,'0'));
+  const existing=editingTicketId?DB.tickets.find(x=>x.id===editingTicketId):null;
+  const rec={
+    id, project:proj,
+    code:document.getElementById('ft-code').value.trim(),
+    client:document.getElementById('ft-client').value.trim(),
+    incId:document.getElementById('ft-inc').value,
+    errCode:document.getElementById('ft-errcode').value.trim(),
+    priority:document.getElementById('ft-priority').value,
+    responsible:document.getElementById('ft-responsible').value.trim(),
+    created:existing?existing.created:now,
+    due:document.getElementById('ft-due').value,
+    status, type:document.getElementById('ft-type').value,
+    comments:document.getElementById('ft-comments').value.trim(),
+    evidence:'',
+    closed:status==='Cerrado'?(existing?existing.closed||now:now):'',
+    totalTime:status==='Cerrado'&&(existing?existing.created:now)?daysBetween(existing?existing.created:now,now)+'d':''
+  };
+  if(editingTicketId){const i=DB.tickets.findIndex(x=>x.id===editingTicketId);DB.tickets[i]=rec;}
+  else DB.tickets.push(rec);
+  saveDB(); closeModal('modal-ticket'); renderTickets(); updateBadges();
+}
+
+// PÓLIZA edit (simple inline for now)
+function editPoliza(id){
+  const p=DB.polizas.find(x=>x.id===id);
+  if(!p) return;
+  const ns=prompt(`Editar estado de póliza para ${p.project}\n\nEstatus actual: ${polizaStatus(p.polEnd)}\nFecha fin actual: ${p.polEnd}\n\nIngresa nueva fecha fin (YYYY-MM-DD):`,p.polEnd||'');
+  if(ns!==null){ p.polEnd=ns; saveDB(); renderPolizas(); }
+}
+
+function deleteRecord(collection, id, view){
+  if(!confirm('¿Eliminar este registro?')) return;
+  DB[collection]=DB[collection].filter(x=>String(x.id)!==String(id));
+  saveDB();
+  if(view==='inc') renderIncidencias();
+  else if(view==='warr') renderWarranties();
+  else if(view==='err') renderErrors();
+  else if(view==='tkt') renderTickets();
+  updateBadges();
+}
+
+// ════════════════════════════════════════════════════════
+//  EXPORT / IMPORT
+// ════════════════════════════════════════════════════════
+function exportCurrentTable(){
+  const map={
+    incidencias:()=>DB.incidencias.map(r=>({Plataforma:r.platform,Num:r.num,Sitio:r.site,Cliente:r.client,Código:r.code,Prioridad:r.priority,'Cód.Error':r.errCode,Clasificación:r.classification,Problema:r.problem,Solución:r.solution,'Alta Ticket':r.ticketAlta,'Días Inc.':calcIncDays(r)||0,Notas:r.notes})),
+    garantias:()=>DB.garantias.map(w=>({Proyecto:w.project,Código:w.code,Equipo:w.equipment,Marca:w.brand,Modelo:w.model,SN:w.sn,Error:w.error,Proveedor:w.supplier,Contacto:w.contact,Ticket:w.ticket,Estatus:w.status,Fecha:w.uploadDate,Días:daysBetween(w.uploadDate,today())||0,Comentarios:w.comments})),
+    tickets:()=>DB.tickets.map(t=>({ID:t.id,Proyecto:t.project,Cliente:t.client,'Cód.Error':t.errCode,Prioridad:t.priority,Responsable:t.responsible,Creación:t.created,Compromiso:t.due,Estatus:t.status,'Días Abierto':calcTicketDays(t)||0})),
+    polizas:()=>DB.polizas.map(p=>({Grupo:p.grupo,Código:p.code,Proyecto:p.project,Plataforma:p.platform,'Garantía Inicio':p.polStart,'Garantía Fin':p.polEnd,Estatus:polizaStatus(p.polEnd),Póliza:p.poliza,Zona:p.cuadrilla||p.zona})),
+    errores:()=>DB.errores.map(e=>({Clave:e.clave,Marca:e.brand,Código:e.code,Clasificación:e.classification,Problema:e.problem,'Causa Posible':e.cause,Solución:e.solution,Prioridad:e.priority})),
+  };
+  const fn=map[currentTab];
+  if(!fn){alert('Exportación no disponible para esta sección');return;}
+  const data=fn();
+  if(!data.length){alert('Sin datos para exportar');return;}
+  if(window.XLSX){
+    const ws=XLSX.utils.json_to_sheet(data);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,'Datos',ws);
+    XLSX.writeFile(wb,`skyPV_${currentTab}_${today()}.xlsx`);
+  } else {
+    const rows=[Object.keys(data[0]),...data.map(r=>Object.values(r))];
+    downloadCSV(rows,`skyPV_${currentTab}_${today()}.csv`);
+  }
+}
+
+function downloadCSV(rows,filename){
+  const csv=rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+}
+
+function importFile(input, type){
+  const file=input.files[0]; if(!file) return;
+  const statusEl=document.getElementById(`import-${type}-status`);
+  const log=document.getElementById('import-log');
+  log.textContent='Leyendo archivo: '+file.name+'...\n';
+  statusEl.textContent='⏳ Procesando...';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary'});
+      let imported=0;
+      log.textContent+=`Hojas encontradas: ${wb.SheetNames.join(', ')}\n`;
+
+      // Read Registro PV
+      if(wb.SheetNames.some(s=>/registro.*pv|registro pv/i.test(s))){
+        const shName=wb.SheetNames.find(s=>/registro.*pv|registro pv/i.test(s));
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[shName],{defval:''});
+        let added=0;
+        rows.forEach((row,i)=>{
+          if(i<2) return; // skip header rows
+          const site=row['SITIOS ACTUALIZADOS']||row['Sitios actualizados']||row['SITIO']||'';
+          if(!site) return;
+          const code=row['CODIGO DE PROYECTOS']||row['Código de proyecto']||'';
+          const exists=DB.incidencias.find(r=>r.site===String(site).trim()&&r.code===String(code).trim());
+          if(!exists){
+            DB.incidencias.push({
+              id:nextId(DB.incidencias),
+              platform:row['PLATAFORMA']||row['Plataforma']||'',
+              num:row['#']||'',
+              site:String(site).trim(),
+              client:row['CLIENTE']||row['Cliente']||'',
+              code:String(code).trim(),
+              priority:String(row['PRIORIDAD']||row['Prioridad']||'').replace(/^[0-3]$/,''),
+              notes:row['NOTAS DE MONITOREO']||row['Notas']||'',
+              lastMod:excelDateToISO(row['FECHA/HORA ÚLTIMA MODIFICACIÓN'])||String(row['FECHA/HORA ÚLTIMA MODIFICACIÓN']||''),
+              incDate:excelDateToISO(row['FECHA/HORA DE INCIDENCIA'])||String(row['FECHA/HORA DE INCIDENCIA']||''),
+              days:0,
+              errCode:String(row['CÓDIGO DE ERROR']||row['Código de error']||''),
+              classification:row['CLASIFICACIÓN DE INCIDENCIAS']||'',
+              problem:row['PROBLEMA']||'',
+              cause:row['CAUSA POSIBLE']||'',
+              solution:row['SOLUCIÓN']||'',
+              ticketAlta:row['ALTA DE TICKET']||'NO',
+              ticketDate:excelDateToISO(row['FECHA DE TICKET EN PLATAFORMA'])||'',
+              responsible:'',comments:''
+            });
+            added++; imported++;
+          }
+        });
+        log.textContent+=`Hoja "Registro PV": ${added} nuevas incidencias importadas.\n`;
+      }
+
+      // Read Tabla de errores
+      if(wb.SheetNames.some(s=>/tabla.*error|errores/i.test(s))){
+        const shName=wb.SheetNames.find(s=>/tabla.*error|errores/i.test(s));
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[shName],{defval:''});
+        let added=0;
+        rows.forEach(row=>{
+          const brand=row['MARCA']||row['Marca']||'';
+          const code=String(row['CÓDIGO DE ERROR']||row['Código de error']||'').trim();
+          if(!brand||!code) return;
+          const clave=`${brand}|${code}`;
+          if(!DB.errores.find(e=>e.clave===clave)){
+            DB.errores.push({id:nextId(DB.errores),clave,brand:String(brand).trim(),code,classification:row['CLASIFICACIÓN DE INCIDENCIAS']||'INVERSOR',problem:row['PROBLEMA']||'',cause:row['CAUSA POSIBLE']||'',solution:row['SOLUCIÓN']||'',priority:row['PRIORIDAD']||'Alta'});
+            added++; imported++;
+          }
+        });
+        log.textContent+=`Hoja "Tabla de errores": ${added} nuevos errores importados.\n`;
+      }
+
+      // Read GARANTIAS
+      if(wb.SheetNames.some(s=>/garantia/i.test(s))){
+        const shName=wb.SheetNames.find(s=>/garantia/i.test(s));
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[shName],{defval:'',range:1});
+        let added=0;
+        rows.forEach(row=>{
+          const proj=row['Proyecto']||row['PROYECTO']||'';
+          if(!proj||proj==='Proyecto') return;
+          const ticket=String(row['Ticket']||row['TICKET']||'');
+          if(!DB.garantias.find(w=>w.project===String(proj).trim()&&w.ticket===ticket)){
+            DB.garantias.push({
+              id:nextId(DB.garantias),project:String(proj).trim(),
+              code:row['Codigo de proyecto']||row['Código']||'',
+              equipment:row['Equipo dañado']||'',brand:row['Marca']||'',
+              model:row['Modelo']||'',sn:row['SN del Equipo']||row['SN']||'',
+              error:row['Error de incidencia']||'',supplier:row['Proveedor']||'',
+              contact:row['Contacto de proveedor']||'',ticket,
+              status:row['Estatus']||'En revisión',
+              uploadDate:excelDateToISO(row['Fecha de subida'])||String(row['Fecha de subida']||''),
+              comments:row['Comentarios']||''
+            });
+            added++; imported++;
+          }
+        });
+        log.textContent+=`Hoja "GARANTIAS": ${added} nuevas garantías importadas.\n`;
+      }
+
+      // Read Vigencia for polizas
+      if(wb.SheetNames.some(s=>/vigencia/i.test(s))){
+        const shName=wb.SheetNames.find(s=>/vigencia/i.test(s));
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[shName],{defval:'',range:2});
+        let added=0;
+        rows.forEach(row=>{
+          const code=row['Código']||row['CÓDIGO']||row['Codigo']||'';
+          const proj=row['Proyecto']||row['PROYECTO']||'';
+          if(!code&&!proj) return;
+          if(!DB.polizas.find(p=>p.code===String(code).trim())){
+            DB.polizas.push({
+              id:nextId(DB.polizas),
+              item:row['Item']||row['#']||DB.polizas.length+1,
+              grupo:row['Gupo']||row['Grupo']||row['GRUPO']||'',
+              code:String(code).trim(),project:String(proj).trim(),
+              tarifa:row['Tarifa']||'',platform:row['Plataforma']||'',
+              sysStart:excelDateToISO(row['Inicio del Sistema'])||'',
+              polStart:excelDateToISO(row['Inicio ']||row['Inicio']||0)||'',
+              polEnd:excelDateToISO(row['Fin']||0)||'',
+              status:row['Estatus']||'',poliza:row['Garantía']||row['Póliza']||'',
+              zona:row['Ubicación']||row['Zona']||'',cuadrilla:row['Cuadrilla']||''
+            });
+            added++; imported++;
+          }
+        });
+        log.textContent+=`Hoja "Vigencia": ${added} nuevos proyectos/pólizas importados.\n`;
+      }
+
+      saveDB();
+      log.textContent+=`\n✅ Importación completada: ${imported} registros totales.\n`;
+      statusEl.textContent=`✅ ${imported} registros importados`;
+      updateBadges();
+    } catch(err){
+      log.textContent+='❌ Error al procesar: '+err.message+'\n';
+      statusEl.textContent='❌ Error al leer';
+      console.error(err);
+    }
+  };
+  reader.readAsBinaryString(file);
+  input.value='';
+}
+
+// ════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════
+function updateBadges(){
+  const openInc=DB.incidencias.filter(r=>r.priority==='Critico'||r.priority==='Alta').length;
+  const activeWarr=DB.garantias.filter(w=>!/cerrado/i.test(w.status)).length;
+  document.getElementById('badge-inc').textContent=openInc;
+  document.getElementById('badge-warr').textContent=activeWarr;
+}
+
+function updateDataLists(){
+  // clients
+  const clients=[...new Set(DB.incidencias.map(r=>r.client).concat(DB.polizas.map(p=>p.grupo)).filter(Boolean))];
+  document.getElementById('client-list').innerHTML=clients.map(c=>`<option value="${esc(c)}">`).join('');
+  // codes
+  const codes=[...new Set(DB.incidencias.map(r=>r.code).concat(DB.polizas.map(p=>p.code)).filter(Boolean))];
+  document.getElementById('code-list').innerHTML=codes.map(c=>`<option value="${esc(c)}">`).join('');
+  // projects for warranty/ticket
+  const projs=[...new Set(DB.incidencias.map(r=>r.site).concat(DB.polizas.map(p=>p.project)).filter(Boolean))];
+  document.getElementById('proj-list-w').innerHTML=projs.map(p=>`<option value="${esc(p)}">`).join('');
+  document.getElementById('proj-list-t').innerHTML=projs.map(p=>`<option value="${esc(p)}">`).join('');
+}
+
+function clearFilter(type){
+  document.querySelectorAll(`#tab-${type==='inc'?'incidencias':type==='warr'?'garantias':type==='err'?'errores':type==='pol'?'polizas':type} input, #tab-${type==='inc'?'incidencias':type==='warr'?'garantias':type==='err'?'errores':type==='pol'?'polizas':type} select`).forEach(el=>{el.value='';delete el.dataset.built;});
+  if(type==='inc') renderIncidencias();
+  else if(type==='warr') renderWarranties();
+  else if(type==='err') renderErrors();
+  else if(type==='pol') renderPolizas();
+}
+
+function sortTable(type, col){}
+
+// ════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  updateBadges();
+  updateDataLists();
+  renderDashboard();
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(m=>{
+    m.addEventListener('click',e=>{ if(e.target===m) closeModal(m.id); });
+  });
+});
+</script>
+</body>
+</html>
